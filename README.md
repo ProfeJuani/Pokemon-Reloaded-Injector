@@ -64,3 +64,4 @@ Herramienta autónoma y visual para la edición y modificación segura de partid
 
 ## 📜 Licencia
 Uso personal y educativo para la comunidad de Pokémon Reloaded. Todos los derechos del juego pertenecen a F3R y sus desarrolladores.
+
