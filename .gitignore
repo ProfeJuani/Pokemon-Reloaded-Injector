@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# Archivos de juego y partidas (privacidad y tamaño)
+Proyecto Reloaded*/
+data/
+partidas/
+backups/
+*.savc
+*.savb
+*.data
+*.nfo
+*.dll
+*.exe
+*.log
+
+# Entornos virtuales y temporales
+.venv/
+venv/
+ENV/
+temp_*
+test_*
