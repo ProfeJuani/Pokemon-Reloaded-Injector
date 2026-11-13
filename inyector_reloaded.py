@@ -381,7 +381,74 @@ SHOP_CASINO_MTS = [
     (5117, "MT73 Reflejo (Centro Comercial)")
 ]
 
-def execute_injection(dinero=None, banco=None, masterballs=None, ultraballs=None, caramelos=None, vitaminas=None, items_custom=None, mts=None):
+SAFE_CONSUMABLES = {
+    # Curación y Salud
+    "Restaurar Todo": 19,
+    "Poción Máxima": 18,
+    "Hiperpoción": 17,
+    "Superpoción": 16,
+    "Poción": 15,
+    "Revivir Máximo": 22,
+    "Revivir": 21,
+    "Cura Total": 20,
+    "Hierba Revivir": 550,
+    "Leche Mu-Mu": 26,
+    "Zumo de Baya": 580,
+    "Antídoto": 27,
+    "Antiquemar": 28,
+    "Antihielo": 29,
+    "Despertar": 30,
+    "Antiparalizador": 31,
+    
+    # PP y Combate
+    "Máx. Elixir": 294,
+    "Restos": 303,
+    "Ataque X": 295,
+    "Defensa X": 296,
+    "Velocidad X": 297,
+    "Especial X": 299,
+    "Directo": 301,
+    
+    # Crianza, IVs y Experiencia
+    "Caramelo Raro": 38,
+    "Chapa Dorada (Max IVs)": 537,
+    "Chapa Plateada": 538,
+    "Caramelo Exp. XL": 687,
+    "Caramelo Exp. L": 686,
+    "Caramelo Exp. M": 685,
+    "Caramelo Exp. S": 684,
+    "Caramelo Dinamax": 660,
+    
+    # Piedras Evolutivas
+    "Piedra Fuego": 45,
+    "Piedra Agua": 47,
+    "Piedra Trueno": 46,
+    "Piedra Hoja": 48,
+    "Piedra Lunar": 44,
+    "Piedra Solar": 43,
+    "Piedra Noche": 50,
+    "Piedra Día": 49,
+    "Piedra Alba": 51,
+    "Piedra Hielo": 54,
+    "Piedra Oval": 52,
+    "Roca Del Rey": 53,
+    
+    # Exploración
+    "MaxRepel": 41,
+    "SuperRepel": 40,
+    "Repelente": 39,
+    "Cuerda Huida": 42,
+}
+
+PACK_SUPERVIVENCIA = [
+    (19, 50),   # Restaurar Todo x50
+    (22, 50),   # Revivir Máximo x50
+    (294, 50),  # Máx. Elixir x50
+    (41, 30),   # MaxRepel x30
+    (537, 10),  # Chapa Dorada x10
+]
+
+def execute_injection(dinero=None, banco=None, masterballs=None, ultraballs=None, caramelos=None, vitaminas=None, items_custom=None, mts=None, pack_supervivencia=False):
     if not check_game_process():
         sys.exit(1)
         
@@ -504,11 +571,17 @@ def execute_injection(dinero=None, banco=None, masterballs=None, ultraballs=None
         found = False
         for i in range(420):
             if int(glb.ObItem[i]) == item_id:
-                glb.nObItem[i] = count
-                replacements[f'glb.nObItem[{i}]'] = count
+                if count <= 0:
+                    glb.ObItem[i] = 0
+                    glb.nObItem[i] = 0
+                    replacements[f'glb.ObItem[{i}]'] = 0
+                    replacements[f'glb.nObItem[{i}]'] = 0
+                else:
+                    glb.nObItem[i] = count
+                    replacements[f'glb.nObItem[{i}]'] = count
                 found = True
                 break
-        if not found:
+        if not found and count > 0:
             for i in range(420):
                 if int(glb.ObItem[i]) == 0:
                     glb.ObItem[i] = item_id
@@ -517,6 +590,11 @@ def execute_injection(dinero=None, banco=None, masterballs=None, ultraballs=None
                     replacements[f'glb.nObItem[{i}]'] = count
                     break
         item_changes = True
+
+    if pack_supervivencia:
+        for it_id, it_count in PACK_SUPERVIVENCIA:
+            set_item(it_id, it_count)
+            print(f"[+] Pack Supervivencia (ID {it_id}): {it_count} unidades")
 
     if caramelos is not None:
         target_car = int(caramelos)
@@ -735,15 +813,30 @@ if __name__ == "__main__":
     parser.add_argument("--vitaminas", type=int, help="Cantidad de cada vitamina (Proteína, Hierro, etc.)")
     parser.add_argument("--mts", action="store_true", help="Inyectar pack de MTs de Tienda y Casino")
     parser.add_argument("--item", nargs=2, action="append", metavar=('ID', 'CANTIDAD'), help="Añadir objeto por ID y cantidad")
+    parser.add_argument("--consumible", nargs=2, action="append", metavar=('NOMBRE_O_ID', 'CANTIDAD'), help="Añadir consumible seguro por nombre o ID")
+    parser.add_argument("--pack-supervivencia", action="store_true", help="Inyectar pack de supervivencia (50 Restaurar Todo, 50 Revivir Máx, 50 Máx Elixir, 30 MaxRepel, 10 Chapas Doradas)")
 
     args = parser.parse_args()
 
     # Si se pasan argumentos por línea de comandos
-    if any([args.dinero, args.banco, args.masterballs, args.ultraballs, args.caramelos, args.vitaminas, args.mts, args.item]):
+    if any([args.dinero, args.banco, args.masterballs, args.ultraballs, args.caramelos, args.vitaminas, args.mts, args.item, args.consumible, args.pack_supervivencia]):
         items_c = []
         if args.item:
             for it_id, it_cnt in args.item:
                 items_c.append((int(it_id), int(it_cnt)))
+        if args.consumible:
+            for it_ref, it_cnt in args.consumible:
+                if it_ref.isdigit():
+                    items_c.append((int(it_ref), int(it_cnt)))
+                elif it_ref in SAFE_CONSUMABLES:
+                    items_c.append((SAFE_CONSUMABLES[it_ref], int(it_cnt)))
+                else:
+                    # Intento de búsqueda parcial
+                    match = next((v for k, v in SAFE_CONSUMABLES.items() if it_ref.lower() in k.lower()), None)
+                    if match:
+                        items_c.append((match, int(it_cnt)))
+                    else:
+                        print(f"[!] Consumible no reconocido: {it_ref}")
         execute_injection(
             dinero=args.dinero,
             banco=args.banco,
@@ -752,7 +845,8 @@ if __name__ == "__main__":
             caramelos=args.caramelos,
             vitaminas=args.vitaminas,
             items_custom=items_c,
-            mts=args.mts
+            mts=args.mts,
+            pack_supervivencia=args.pack_supervivencia
         )
     else:
         print("=== INYECTOR SEGURO Y JUSTIFICADO - POKÉMON RELOADED ===")
@@ -760,9 +854,10 @@ if __name__ == "__main__":
         print("2. Solo Master Balls Justificadas")
         print("3. Solo Caramelos Raros")
         print("4. Paquete de Vitaminas para Maxear Stats (Proteínas, Hierro, Calcio, Carbohidratos, Zinc, Más PS)")
-        print("5. Solo Dinero y Banco al Máximo")
+        print("5. Pack Supervivencia (Restaurar Todo, Revivir Máx, Máx Elixir, MaxRepel, Chapas Doradas)")
+        print("6. Solo Dinero y Banco al Máximo")
         print("0. Salir")
-        opc = input("\nElige una opción (0-5): ").strip()
+        opc = input("\nElige una opción (0-6): ").strip()
         if opc == '1':
             execute_injection(dinero=500000, banco=1000000, masterballs=10, caramelos=50, ultraballs=50)
         elif opc == '2':
@@ -775,6 +870,8 @@ if __name__ == "__main__":
             cnt = int(input("¿Cuántas unidades de cada vitamina deseas?: "))
             execute_injection(vitaminas=cnt)
         elif opc == '5':
+            execute_injection(pack_supervivencia=True)
+        elif opc == '6':
             execute_injection(dinero=999999, banco=1000000)
         else:
             print("Operación cancelada.")
