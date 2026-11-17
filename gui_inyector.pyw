@@ -1,243 +1,594 @@
 import os
-import sys
 import subprocess
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-# Import the core engine functions from inyector_reloaded
 import inyector_reloaded
+
 
 class InyectorApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Pokémon Reloaded - Inyector Seguro y Justificado")
-        self.root.geometry("640x720")
-        self.root.minsize(580, 680)
-        
-        # Color palette
-        self.bg_color = "#18181b"       # Zinc 900
-        self.card_bg = "#27272a"        # Zinc 800
-        self.card_border = "#3f3f46"    # Zinc 700
-        self.fg_color = "#f4f4f5"       # Zinc 100
-        self.muted_fg = "#a1a1aa"       # Zinc 400
-        self.accent_color = "#6366f1"   # Indigo 500
-        self.accent_hover = "#4f46e5"   # Indigo 600
-        self.success_color = "#22c55e"  # Green 500
-        
-        self.root.configure(bg=self.bg_color)
-        self.setup_styles()
-        self.create_widgets()
-        self.refresh_live_status()
+        self.root.title("Pokémon Reloaded - Inyector Seguro")
+        self.root.geometry("860x600")
+        self.root.minsize(780, 540)
 
-    def setup_styles(self):
+        # Paleta oscura moderna (Zinc + Indigo + Amber)
+        self.bg_main = "#18181b"
+        self.bg_sidebar = "#111113"
+        self.bg_card = "#27272a"
+        self.bg_input = "#121215"
+        self.border_col = "#3f3f46"
+        self.fg_text = "#f4f4f5"
+        self.fg_muted = "#a1a1aa"
+        self.accent = "#6366f1"
+        self.accent_hover = "#4f46e5"
+        self.green = "#16a34a"
+
+        self.catalog = inyector_reloaded.load_item_catalog() + inyector_reloaded.load_mt_catalog()
+        self.bag_counts = {}
+        self.queued_items = []  # [(id, name, pocket, qty)]
+        self.nav_buttons = {}
+        self.pages = {}
+        self.current_page = None
+        self.pocket_widgets = {}
+
+        self.root.configure(bg=self.bg_main)
+        self._setup_styles()
+        self._build_layout()
+        self.refresh_live_status()
+        self.show_page("home")
+
+    def _setup_styles(self):
         style = ttk.Style()
         style.theme_use("clam")
-        
-        style.configure("TFrame", background=self.bg_color)
-        style.configure("Card.TFrame", background=self.card_bg)
-        
-        style.configure("TLabel", background=self.bg_color, foreground=self.fg_color, font=("Segoe UI", 10))
-        style.configure("Muted.TLabel", background=self.card_bg, foreground=self.muted_fg, font=("Segoe UI", 9))
-        style.configure("CardTitle.TLabel", background=self.card_bg, foreground=self.fg_color, font=("Segoe UI", 11, "bold"))
-        style.configure("CardVal.TLabel", background=self.card_bg, foreground="#38bdf8", font=("Segoe UI", 10, "bold"))
-        
-        style.configure("Accent.TButton", background=self.accent_color, foreground="#ffffff", font=("Segoe UI", 11, "bold"), borderwidth=0)
-        style.map("Accent.TButton", background=[("active", self.accent_hover)])
-        
-        style.configure("Quick.TButton", background="#3f3f46", foreground="#ffffff", font=("Segoe UI", 9), borderwidth=0)
-        style.map("Quick.TButton", background=[("active", "#52525b")])
 
-    def create_widgets(self):
-        main_container = ttk.Frame(self.root, padding=16)
-        main_container.pack(fill=tk.BOTH, expand=True)
-        
-        # Header
-        header_frame = ttk.Frame(main_container)
-        header_frame.pack(fill=tk.X, pady=(0, 12))
-        
-        title_lbl = tk.Label(header_frame, text="POKÉMON RELOADED", font=("Segoe UI", 16, "bold"), bg=self.bg_color, fg="#fbbf24")
-        title_lbl.pack(anchor="w")
-        subtitle_lbl = tk.Label(header_frame, text="Inyector Seguro con Justificación Criptográfica Nativa (Anti-Cheat Bypass)", font=("Segoe UI", 9), bg=self.bg_color, fg=self.muted_fg)
-        subtitle_lbl.pack(anchor="w")
+        style.configure(
+            "Dark.Treeview",
+            background=self.bg_input,
+            foreground=self.fg_text,
+            fieldbackground=self.bg_input,
+            borderwidth=0,
+            rowheight=26,
+            font=("Segoe UI", 9),
+        )
+        style.configure(
+            "Dark.Treeview.Heading",
+            background=self.bg_card,
+            foreground="#fbbf24",
+            borderwidth=0,
+            font=("Segoe UI", 9, "bold"),
+        )
+        style.map(
+            "Dark.Treeview",
+            background=[("selected", self.accent_hover)],
+            foreground=[("selected", "#ffffff")],
+        )
+        style.configure(
+            "Vertical.TScrollbar",
+            background=self.bg_card,
+            troughcolor=self.bg_input,
+            borderwidth=0,
+            arrowcolor=self.fg_muted,
+        )
 
-        # Live Status Card
-        status_card = tk.LabelFrame(main_container, text=" Estado Actual de la Partida ", bg=self.card_bg, fg="#fbbf24", font=("Segoe UI", 10, "bold"), padx=12, pady=8, bd=1, relief=tk.SOLID)
-        status_card.pack(fill=tk.X, pady=(0, 12))
-        
-        st_grid = tk.Frame(status_card, bg=self.card_bg)
-        st_grid.pack(fill=tk.X)
-        
-        tk.Label(st_grid, text="Dinero en Cartera:", bg=self.card_bg, fg=self.muted_fg, font=("Segoe UI", 9)).grid(row=0, column=0, sticky="w", pady=2)
-        self.lbl_dinero = tk.Label(st_grid, text="-- €", bg=self.card_bg, fg="#4ade80", font=("Segoe UI", 9, "bold"))
-        self.lbl_dinero.grid(row=0, column=1, sticky="w", padx=(5, 20), pady=2)
-        
-        tk.Label(st_grid, text="Dinero en Banco:", bg=self.card_bg, fg=self.muted_fg, font=("Segoe UI", 9)).grid(row=0, column=2, sticky="w", pady=2)
-        self.lbl_banco = tk.Label(st_grid, text="-- €", bg=self.card_bg, fg="#4ade80", font=("Segoe UI", 9, "bold"))
-        self.lbl_banco.grid(row=0, column=3, sticky="w", padx=5, pady=2)
-        
-        tk.Label(st_grid, text="Master Balls:", bg=self.card_bg, fg=self.muted_fg, font=("Segoe UI", 9)).grid(row=1, column=0, sticky="w", pady=2)
-        self.lbl_mb = tk.Label(st_grid, text="--", bg=self.card_bg, fg="#c084fc", font=("Segoe UI", 9, "bold"))
-        self.lbl_mb.grid(row=1, column=1, sticky="w", padx=(5, 20), pady=2)
-        
-        tk.Label(st_grid, text="Caramelos Raros:", bg=self.card_bg, fg=self.muted_fg, font=("Segoe UI", 9)).grid(row=1, column=2, sticky="w", pady=2)
-        self.lbl_caramelos = tk.Label(st_grid, text="--", bg=self.card_bg, fg="#38bdf8", font=("Segoe UI", 9, "bold"))
-        self.lbl_caramelos.grid(row=1, column=3, sticky="w", padx=5, pady=2)
+    def _build_layout(self):
+        # Contenedor principal horizontal: Sidebar | Contenido
+        container = tk.Frame(self.root, bg=self.bg_main)
+        container.pack(fill=tk.BOTH, expand=True)
 
-        tk.Label(st_grid, text="MTs en Mochila:", bg=self.card_bg, fg=self.muted_fg, font=("Segoe UI", 9)).grid(row=2, column=0, sticky="w", pady=2)
-        self.lbl_mts = tk.Label(st_grid, text="--", bg=self.card_bg, fg="#f59e0b", font=("Segoe UI", 9, "bold"))
-        self.lbl_mts.grid(row=2, column=1, sticky="w", padx=(5, 20), pady=2)
+        # --- SIDEBAR IZQUIERDO ---
+        sidebar = tk.Frame(container, bg=self.bg_sidebar, width=210)
+        sidebar.pack(side=tk.LEFT, fill=tk.Y)
+        sidebar.pack_propagate(False)
 
-        # Quick Actions Card
-        quick_card = tk.LabelFrame(main_container, text=" Acciones Rápidas (1 Clic) ", bg=self.card_bg, fg=self.fg_color, font=("Segoe UI", 10, "bold"), padx=10, pady=8, bd=1, relief=tk.SOLID)
-        quick_card.pack(fill=tk.X, pady=(0, 12))
-        
-        btn_q1 = tk.Button(quick_card, text="⭐ Pack Aventura (10 Master Balls + 50 Caramelos + 50 Ultra Balls)", bg="#3f3f46", fg="#ffffff", font=("Segoe UI", 9), bd=0, padx=8, pady=5, cursor="hand2", command=self.apply_pack_aventura)
-        btn_q1.pack(fill=tk.X, pady=3)
-        
-        btn_q2 = tk.Button(quick_card, text="💪 Maxear Stats (Lote de 30 Vitaminas de cada tipo: PS, Atk, Def, Vel...)", bg="#3f3f46", fg="#ffffff", font=("Segoe UI", 9), bd=0, padx=8, pady=5, cursor="hand2", command=self.apply_pack_vitaminas)
-        btn_q2.pack(fill=tk.X, pady=3)
+        brand = tk.Frame(sidebar, bg=self.bg_sidebar, padx=16, pady=18)
+        brand.pack(fill=tk.X)
+        tk.Label(
+            brand, text="⚡ PKM RELOADED", font=("Segoe UI", 12, "bold"),
+            bg=self.bg_sidebar, fg="#fbbf24"
+        ).pack(anchor="w")
+        tk.Label(
+            brand, text="Inyector Seguro • Anti-Cheat", font=("Segoe UI", 8),
+            bg=self.bg_sidebar, fg=self.fg_muted
+        ).pack(anchor="w", pady=(2, 0))
 
-        btn_q3 = tk.Button(quick_card, text="💰 Máximo Dinero (999.999 € Cartera + 1.000.000 € Banco)", bg="#3f3f46", fg="#ffffff", font=("Segoe UI", 9), bd=0, padx=8, pady=5, cursor="hand2", command=self.apply_pack_dinero)
-        btn_q3.pack(fill=tk.X, pady=3)
+        tk.Frame(sidebar, bg=self.border_col, height=1).pack(fill=tk.X, padx=12, pady=(0, 10))
 
-        btn_q4 = tk.Button(quick_card, text="💿 Añadir MTs de Tienda y Casino (19 MTs: Terremoto, Rayo, Lanzallamas...)", bg="#3f3f46", fg="#ffffff", font=("Segoe UI", 9), bd=0, padx=8, pady=5, cursor="hand2", command=self.apply_pack_mts)
-        btn_q4.pack(fill=tk.X, pady=3)
+        items_count = sum(1 for c in self.catalog if c["pocket"] == "item")
+        balls_count = sum(1 for c in self.catalog if c["pocket"] == "ball")
+        mts_count = sum(1 for c in self.catalog if c["pocket"] == "mt")
 
-        # Custom Fields Card
-        custom_card = tk.LabelFrame(main_container, text=" Personalizar Cantidades ", bg=self.card_bg, fg=self.fg_color, font=("Segoe UI", 10, "bold"), padx=12, pady=10, bd=1, relief=tk.SOLID)
-        custom_card.pack(fill=tk.X, pady=(0, 12))
-        
-        cf_grid = tk.Frame(custom_card, bg=self.card_bg)
-        cf_grid.pack(fill=tk.X)
-        
-        # Row 0: Master Balls
-        tk.Label(cf_grid, text="Master Balls a fijar:", bg=self.card_bg, fg=self.fg_color, font=("Segoe UI", 9)).grid(row=0, column=0, sticky="w", pady=4)
-        self.ent_mb = tk.Entry(cf_grid, width=12, font=("Segoe UI", 10), bg="#18181b", fg="#ffffff", insertbackground="#ffffff", bd=1)
-        self.ent_mb.grid(row=0, column=1, sticky="w", padx=10, pady=4)
-        self.ent_mb.insert(0, "10")
-        
-        # Row 1: Caramelos Raros
-        tk.Label(cf_grid, text="Caramelos Raros a fijar:", bg=self.card_bg, fg=self.fg_color, font=("Segoe UI", 9)).grid(row=1, column=0, sticky="w", pady=4)
-        self.ent_caramelos = tk.Entry(cf_grid, width=12, font=("Segoe UI", 10), bg="#18181b", fg="#ffffff", insertbackground="#ffffff", bd=1)
-        self.ent_caramelos.grid(row=1, column=1, sticky="w", padx=10, pady=4)
-        self.ent_caramelos.insert(0, "50")
+        nav_items = [
+            ("home", "🏠  Resumen y Packs"),
+            ("items", f"🎒  Objetos ({items_count})"),
+            ("balls", f"🔴  Poké Balls ({balls_count})"),
+            ("mts", f"💿  MTs y MOs ({mts_count})"),
+            ("money", "💰  Dinero y MTs"),
+            ("log", "📋  Registro"),
+        ]
+        for key, label in nav_items:
+            btn = tk.Button(
+                sidebar, text=label, anchor="w", padx=16, pady=10,
+                bg=self.bg_sidebar, fg=self.fg_muted,
+                activebackground=self.bg_card, activeforeground="#ffffff",
+                font=("Segoe UI", 10), bd=0, cursor="hand2",
+                command=lambda k=key: self.show_page(k),
+            )
+            btn.pack(fill=tk.X, padx=8, pady=2)
+            self.nav_buttons[key] = btn
 
-        # Row 2: Dinero Cartera
-        tk.Label(cf_grid, text="Dinero en Cartera (€):", bg=self.card_bg, fg=self.fg_color, font=("Segoe UI", 9)).grid(row=2, column=0, sticky="w", pady=4)
-        self.ent_dinero = tk.Entry(cf_grid, width=12, font=("Segoe UI", 10), bg="#18181b", fg="#ffffff", insertbackground="#ffffff", bd=1)
-        self.ent_dinero.grid(row=2, column=1, sticky="w", padx=10, pady=4)
-        self.ent_dinero.insert(0, "950000")
+        # Botones inferiores del sidebar
+        bottom_bar = tk.Frame(sidebar, bg=self.bg_sidebar, padx=12, pady=14)
+        bottom_bar.pack(side=tk.BOTTOM, fill=tk.X)
 
-        # Row 3: Dinero Banco
-        tk.Label(cf_grid, text="Dinero en Banco (€):", bg=self.card_bg, fg=self.fg_color, font=("Segoe UI", 9)).grid(row=3, column=0, sticky="w", pady=4)
-        self.ent_banco = tk.Entry(cf_grid, width=12, font=("Segoe UI", 10), bg="#18181b", fg="#ffffff", insertbackground="#ffffff", bd=1)
-        self.ent_banco.grid(row=3, column=1, sticky="w", padx=10, pady=4)
-        self.ent_banco.insert(0, "1000000")
+        tk.Button(
+            bottom_bar, text="🔄 Recargar Partida", bg=self.bg_card, fg=self.fg_text,
+            activebackground="#3f3f46", activeforeground="#ffffff",
+            font=("Segoe UI", 9), bd=0, pady=7, cursor="hand2",
+            command=self.refresh_live_status,
+        ).pack(fill=tk.X, pady=(0, 6))
 
-        # Inject Button
-        self.btn_inject = tk.Button(main_container, text="⚡ INYECTAR Y JUSTIFICAR EN LA PARTIDA", bg=self.accent_color, fg="#ffffff", font=("Segoe UI", 11, "bold"), bd=0, pady=8, cursor="hand2", command=self.apply_custom_injection)
-        self.btn_inject.pack(fill=tk.X, pady=(0, 10))
+        tk.Button(
+            bottom_bar, text="🎮 Abrir Juego", bg=self.green, fg="#ffffff",
+            activebackground="#15803d", activeforeground="#ffffff",
+            font=("Segoe UI", 9, "bold"), bd=0, pady=8, cursor="hand2",
+            command=self.launch_game,
+        ).pack(fill=tk.X)
 
-        # Log Output Box
-        log_frame = tk.Frame(main_container, bg=self.bg_color)
-        log_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
-        
-        tk.Label(log_frame, text="Registro de Verificación:", bg=self.bg_color, fg=self.muted_fg, font=("Segoe UI", 9)).pack(anchor="w")
-        self.txt_log = tk.Text(log_frame, height=6, bg="#09090b", fg="#4ade80", font=("Consolas", 9), bd=1, relief=tk.SOLID, padx=6, pady=6)
+        # --- ÁREA DE CONTENIDO DERECHA ---
+        right_area = tk.Frame(container, bg=self.bg_main)
+        right_area.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+
+        self.content_frame = tk.Frame(right_area, bg=self.bg_main, padx=20, pady=18)
+        self.content_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Barra de estado inferior
+        status_bar = tk.Frame(right_area, bg=self.bg_sidebar, height=28, padx=14)
+        status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+        status_bar.pack_propagate(False)
+        self.lbl_status = tk.Label(
+            status_bar, text="Listo.", bg=self.bg_sidebar, fg=self.fg_muted,
+            font=("Segoe UI", 8), anchor="w"
+        )
+        self.lbl_status.pack(fill=tk.BOTH, expand=True)
+
+        # Construir páginas
+        self._build_home_page()
+        self._build_pocket_page("items", "item", "🎒 Mochila de Objetos", "Busca cualquier objeto, pon la cantidad y envíalo directo a tu mochila.")
+        self._build_pocket_page("balls", "ball", "🔴 Mochila de Poké Balls", "Las Master Balls se justifican automáticamente en la historia (ev_1434).")
+        self._build_pocket_page("mts", "mt", "💿 Catálogo Completo de MTs y MOs", "Añade cualquier MT/MO individual o todas las MTs (MT1–MT110) con 1 clic.")
+        tk.Button(
+            self.pages["mts"], text="💿 Añadir TODAS las MTs (MT1 – MT110) a mi Mochila",
+            bg="#0284c7", fg="#ffffff", font=("Segoe UI", 9, "bold"),
+            bd=0, padx=14, pady=8, cursor="hand2",
+            command=lambda: self.run_injection_wrapper(mts="all"),
+        ).pack(fill=tk.X, pady=(8, 0))
+        self._build_money_page()
+        self._build_log_page()
+
+    def show_page(self, key):
+        if self.current_page == key:
+            return
+        for k, frame in self.pages.items():
+            frame.pack_forget()
+        for k, btn in self.nav_buttons.items():
+            if k == key:
+                btn.config(bg=self.bg_card, fg="#ffffff", font=("Segoe UI", 10, "bold"))
+            else:
+                btn.config(bg=self.bg_sidebar, fg=self.fg_muted, font=("Segoe UI", 10))
+        self.pages[key].pack(fill=tk.BOTH, expand=True)
+        self.current_page = key
+
+    def _build_home_page(self):
+        page = tk.Frame(self.content_frame, bg=self.bg_main)
+        self.pages["home"] = page
+
+        tk.Label(page, text="Resumen de tu Partida", font=("Segoe UI", 15, "bold"), bg=self.bg_main, fg=self.fg_text).pack(anchor="w")
+        tk.Label(page, text="Estado en vivo de reloaded1.savc con verificación de 60 checkpoints ACS.", font=("Segoe UI", 9), bg=self.bg_main, fg=self.fg_muted).pack(anchor="w", pady=(2, 14))
+
+        # Grid 2x2 de tarjetas de estado
+        cards_grid = tk.Frame(page, bg=self.bg_main)
+        cards_grid.pack(fill=tk.X, pady=(0, 18))
+        cards_grid.columnconfigure(0, weight=1)
+        cards_grid.columnconfigure(1, weight=1)
+
+        self.stat_labels = {}
+        stats = [
+            ("dinero", "Dinero en Cartera", "#4ade80", 0, 0),
+            ("banco", "Dinero en Banco", "#4ade80", 0, 1),
+            ("mb", "Master Balls", "#c084fc", 1, 0),
+            ("caramelos", "Caramelos Raros / MTs", "#38bdf8", 1, 1),
+        ]
+        for key, title, color, r, c in stats:
+            card = tk.Frame(cards_grid, bg=self.bg_card, padx=14, pady=12, highlightthickness=1, highlightbackground=self.border_col)
+            card.grid(row=r, column=c, sticky="ew", padx=(0 if c == 0 else 6, 6 if c == 0 else 0), pady=5)
+            tk.Label(card, text=title, bg=self.bg_card, fg=self.fg_muted, font=("Segoe UI", 9)).pack(anchor="w")
+            lbl = tk.Label(card, text="--", bg=self.bg_card, fg=color, font=("Segoe UI", 14, "bold"))
+            lbl.pack(anchor="w", pady=(3, 0))
+            self.stat_labels[key] = lbl
+
+        tk.Label(page, text="Packs Rápidos (1 Clic)", font=("Segoe UI", 12, "bold"), bg=self.bg_main, fg=self.fg_text).pack(anchor="w", pady=(4, 8))
+
+        packs = [
+            ("⭐  Pack Aventura", "Fija 10 Master Balls + 50 Caramelos Raros + 50 Ultra Balls", lambda: self.run_injection_wrapper(masterballs=10, caramelos=50, ultraballs=50)),
+            ("💪  Maxear Stats (Vitaminas)", "Fija 30 unidades de cada vitamina (Más PS, Proteína, Hierro, Calcio, Carb., Zinc)", lambda: self.run_injection_wrapper(vitaminas=30)),
+            ("💰  Máximo Dinero", "Fija 999.999 € en cartera + 1.000.000 € en banco", lambda: self.run_injection_wrapper(dinero=999999, banco=1000000)),
+            ("💿  Pack de 19 MTs (Tienda y Casino)", "Añade Hiperrayo, Terremoto, Rayo, Lanzallamas, Rayo Hielo, Puños, Climas...", lambda: self.run_injection_wrapper(mts=True)),
+        ]
+        for title, desc, cmd in packs:
+            row = tk.Frame(page, bg=self.bg_card, padx=14, pady=10, highlightthickness=1, highlightbackground=self.border_col)
+            row.pack(fill=tk.X, pady=4)
+            txt_box = tk.Frame(row, bg=self.bg_card)
+            txt_box.pack(side=tk.LEFT, fill=tk.X, expand=True)
+            tk.Label(txt_box, text=title, bg=self.bg_card, fg=self.fg_text, font=("Segoe UI", 10, "bold")).pack(anchor="w")
+            tk.Label(txt_box, text=desc, bg=self.bg_card, fg=self.fg_muted, font=("Segoe UI", 8)).pack(anchor="w")
+            tk.Button(
+                row, text="Aplicar", bg=self.accent, fg="#ffffff",
+                activebackground=self.accent_hover, activeforeground="#ffffff",
+                font=("Segoe UI", 9, "bold"), bd=0, padx=14, pady=6, cursor="hand2",
+                command=cmd,
+            ).pack(side=tk.RIGHT, padx=(10, 0))
+
+    def _build_pocket_page(self, page_key, pocket_type, title, subtitle):
+        page = tk.Frame(self.content_frame, bg=self.bg_main)
+        self.pages[page_key] = page
+
+        tk.Label(page, text=title, font=("Segoe UI", 15, "bold"), bg=self.bg_main, fg=self.fg_text).pack(anchor="w")
+        tk.Label(page, text=subtitle, font=("Segoe UI", 9), bg=self.bg_main, fg=self.fg_muted).pack(anchor="w", pady=(2, 10))
+
+        # Barra de búsqueda y filtros
+        top_bar = tk.Frame(page, bg=self.bg_main)
+        top_bar.pack(fill=tk.X, pady=(0, 8))
+
+        tk.Label(top_bar, text="🔍 Buscar:", bg=self.bg_main, fg=self.fg_text, font=("Segoe UI", 9)).pack(side=tk.LEFT)
+        var_search = tk.StringVar()
+        ent_search = tk.Entry(top_bar, textvariable=var_search, font=("Segoe UI", 10), bg=self.bg_input, fg="#ffffff", insertbackground="#ffffff", bd=1, relief=tk.SOLID)
+        ent_search.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(8, 12))
+
+        var_only_owned = tk.BooleanVar(value=False)
+        chk_owned = tk.Checkbutton(
+            top_bar, text="Solo en mi mochila", variable=var_only_owned,
+            bg=self.bg_main, fg=self.fg_text, selectcolor=self.bg_input,
+            activebackground=self.bg_main, activeforeground="#ffffff",
+            font=("Segoe UI", 9),
+            command=lambda p=pocket_type: self._refresh_pocket_tree(p),
+        )
+        chk_owned.pack(side=tk.RIGHT)
+
+        # Tabla Treeview
+        tree_frame = tk.Frame(page, bg=self.bg_input, highlightthickness=1, highlightbackground=self.border_col)
+        tree_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+
+        tree = ttk.Treeview(tree_frame, columns=("id", "name", "desc", "qty"), show="headings", style="Dark.Treeview", selectmode="browse")
+        tree.heading("id", text="ID")
+        tree.heading("name", text="Nombre")
+        tree.heading("desc", text="Función / Descripción")
+        tree.heading("qty", text="En Mochila")
+        tree.column("id", width=50, anchor="center", stretch=False)
+        tree.column("name", width=165, anchor="w", stretch=False)
+        tree.column("desc", width=290, anchor="w")
+        tree.column("qty", width=85, anchor="center", stretch=False)
+
+        scroll = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=tree.yview, style="Vertical.TScrollbar")
+        tree.configure(yscrollcommand=scroll.set)
+        tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Panel inferior de acción
+        action_card = tk.Frame(page, bg=self.bg_card, padx=14, pady=12, highlightthickness=1, highlightbackground=self.border_col)
+        action_card.pack(fill=tk.X)
+
+        lbl_sel = tk.Label(action_card, text="Selecciona un elemento de la lista", bg=self.bg_card, fg="#fbbf24", font=("Segoe UI", 10, "bold"))
+        lbl_sel.pack(anchor="w")
+        lbl_desc = tk.Label(action_card, text="", bg=self.bg_card, fg=self.fg_muted, font=("Segoe UI", 9), wraplength=580, justify="left")
+        lbl_desc.pack(anchor="w", pady=(2, 8))
+
+        controls = tk.Frame(action_card, bg=self.bg_card)
+        controls.pack(fill=tk.X)
+
+        tk.Label(controls, text="Cantidad a fijar:", bg=self.bg_card, fg=self.fg_text, font=("Segoe UI", 9)).pack(side=tk.LEFT)
+        ent_qty = tk.Entry(controls, width=8, font=("Segoe UI", 10, "bold"), bg=self.bg_input, fg="#ffffff", insertbackground="#ffffff", bd=1, justify="center")
+        ent_qty.pack(side=tk.LEFT, padx=(8, 8))
+        ent_qty.insert(0, "99")
+
+        # Botones rápidos de cantidad
+        for preset in (1, 10, 50, 99, 999):
+            tk.Button(
+                controls, text=str(preset), bg="#3f3f46", fg="#ffffff",
+                activebackground="#52525b", activeforeground="#ffffff",
+                font=("Segoe UI", 8), bd=0, padx=7, pady=4, cursor="hand2",
+                command=lambda v=preset, e=ent_qty: (e.delete(0, tk.END), e.insert(0, str(v))),
+            ).pack(side=tk.LEFT, padx=2)
+
+        tk.Button(
+            controls, text="⚡ Poner en Mochila", bg=self.accent, fg="#ffffff",
+            activebackground=self.accent_hover, activeforeground="#ffffff",
+            font=("Segoe UI", 9, "bold"), bd=0, padx=14, pady=6, cursor="hand2",
+            command=lambda p=pocket_type: self._inject_pocket_selection(p),
+        ).pack(side=tk.RIGHT)
+
+        tk.Button(
+            controls, text="➕ A la cola", bg="#3f3f46", fg="#ffffff",
+            activebackground="#52525b", activeforeground="#ffffff",
+            font=("Segoe UI", 9), bd=0, padx=10, pady=6, cursor="hand2",
+            command=lambda p=pocket_type: self._queue_pocket_selection(p),
+        ).pack(side=tk.RIGHT, padx=(0, 6))
+
+        # Barra de cola (visible cuando hay ítems en cola)
+        queue_bar = tk.Frame(page, bg=self.bg_card, padx=12, pady=8, highlightthickness=1, highlightbackground=self.accent)
+        lbl_queue = tk.Label(queue_bar, text="", bg=self.bg_card, fg="#38bdf8", font=("Segoe UI", 9))
+        lbl_queue.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        tk.Button(
+            queue_bar, text="Limpiar", bg="#52525b", fg="#ffffff",
+            font=("Segoe UI", 8), bd=0, padx=8, pady=4, cursor="hand2",
+            command=self._clear_queue,
+        ).pack(side=tk.RIGHT, padx=(6, 0))
+        tk.Button(
+            queue_bar, text="⚡ Aplicar Toda la Cola", bg=self.green, fg="#ffffff",
+            font=("Segoe UI", 9, "bold"), bd=0, padx=12, pady=4, cursor="hand2",
+            command=self._inject_queue,
+        ).pack(side=tk.RIGHT)
+
+        self.pocket_widgets[pocket_type] = {
+            "var_search": var_search,
+            "var_only_owned": var_only_owned,
+            "tree": tree,
+            "lbl_sel": lbl_sel,
+            "lbl_desc": lbl_desc,
+            "ent_qty": ent_qty,
+            "queue_bar": queue_bar,
+            "lbl_queue": lbl_queue,
+            "filtered": [],
+        }
+
+        var_search.trace_add("write", lambda *_, p=pocket_type: self._refresh_pocket_tree(p))
+        tree.bind("<<ListboxSelect>>", lambda *_, p=pocket_type: self._on_tree_select(p))
+        tree.bind("<<TreeviewSelect>>", lambda *_, p=pocket_type: self._on_tree_select(p))
+        self._refresh_pocket_tree(pocket_type)
+
+    def _build_money_page(self):
+        page = tk.Frame(self.content_frame, bg=self.bg_main)
+        self.pages["money"] = page
+
+        tk.Label(page, text="💰 Dinero y MTs", font=("Segoe UI", 15, "bold"), bg=self.bg_main, fg=self.fg_text).pack(anchor="w")
+        tk.Label(page, text="Deja un campo vacío si no quieres modificar ese valor.", font=("Segoe UI", 9), bg=self.bg_main, fg=self.fg_muted).pack(anchor="w", pady=(2, 14))
+
+        card = tk.Frame(page, bg=self.bg_card, padx=18, pady=16, highlightthickness=1, highlightbackground=self.border_col)
+        card.pack(fill=tk.X, pady=(0, 14))
+
+        tk.Label(card, text="Dinero en Cartera (€):", bg=self.bg_card, fg=self.fg_text, font=("Segoe UI", 10)).grid(row=0, column=0, sticky="w", pady=8)
+        self.ent_dinero = tk.Entry(card, width=18, font=("Segoe UI", 11), bg=self.bg_input, fg="#ffffff", insertbackground="#ffffff", bd=1)
+        self.ent_dinero.grid(row=0, column=1, sticky="w", padx=14, pady=8)
+
+        tk.Label(card, text="Dinero en Banco (€):", bg=self.bg_card, fg=self.fg_text, font=("Segoe UI", 10)).grid(row=1, column=0, sticky="w", pady=8)
+        self.ent_banco = tk.Entry(card, width=18, font=("Segoe UI", 11), bg=self.bg_input, fg="#ffffff", insertbackground="#ffffff", bd=1)
+        self.ent_banco.grid(row=1, column=1, sticky="w", padx=14, pady=8)
+
+        tk.Button(
+            card, text="⚡ Actualizar Dinero", bg=self.accent, fg="#ffffff",
+            activebackground=self.accent_hover, activeforeground="#ffffff",
+            font=("Segoe UI", 10, "bold"), bd=0, padx=16, pady=8, cursor="hand2",
+            command=self._apply_money,
+        ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(12, 0))
+
+        mt_card = tk.Frame(page, bg=self.bg_card, padx=18, pady=16, highlightthickness=1, highlightbackground=self.border_col)
+        mt_card.pack(fill=tk.X)
+        tk.Label(mt_card, text="💿 MTs de Tienda y Casino (19 MTs)", bg=self.bg_card, fg=self.fg_text, font=("Segoe UI", 11, "bold")).pack(anchor="w")
+        tk.Label(mt_card, text="Incluye Hiperrayo, Terremoto, Rayo, Rayo Hielo, Lanzallamas, Climas, Puños elementales y Reflejo.", bg=self.bg_card, fg=self.fg_muted, font=("Segoe UI", 9), wraplength=540, justify="left").pack(anchor="w", pady=(4, 10))
+        tk.Button(
+            mt_card, text="💿 Añadir las 19 MTs a mi Mochila", bg="#0284c7", fg="#ffffff",
+            font=("Segoe UI", 9, "bold"), bd=0, padx=14, pady=7, cursor="hand2",
+            command=lambda: self.run_injection_wrapper(mts=True),
+        ).pack(anchor="w")
+
+    def _build_log_page(self):
+        page = tk.Frame(self.content_frame, bg=self.bg_main)
+        self.pages["log"] = page
+
+        tk.Label(page, text="📋 Registro de Verificación", font=("Segoe UI", 15, "bold"), bg=self.bg_main, fg=self.fg_text).pack(anchor="w")
+        tk.Label(page, text="Detalle técnico de copias de seguridad y recálculo de checksums ACS.", font=("Segoe UI", 9), bg=self.bg_main, fg=self.fg_muted).pack(anchor="w", pady=(2, 10))
+
+        self.txt_log = tk.Text(page, bg="#09090b", fg="#4ade80", font=("Consolas", 9), bd=1, relief=tk.SOLID, padx=10, pady=10)
         self.txt_log.pack(fill=tk.BOTH, expand=True)
 
-        # Footer Buttons
-        footer_frame = tk.Frame(main_container, bg=self.bg_color)
-        footer_frame.pack(fill=tk.X)
-        
-        btn_refresh = tk.Button(footer_frame, text="🔄 Recargar Estado", bg="#3f3f46", fg="#ffffff", font=("Segoe UI", 9), bd=0, padx=12, pady=5, cursor="hand2", command=self.refresh_live_status)
-        btn_refresh.pack(side=tk.LEFT)
-        
-        btn_launch = tk.Button(footer_frame, text="🎮 Abrir Pokémon Reloaded", bg="#16a34a", fg="#ffffff", font=("Segoe UI", 9, "bold"), bd=0, padx=12, pady=5, cursor="hand2", command=self.launch_game)
-        btn_launch.pack(side=tk.RIGHT)
+    def _refresh_pocket_tree(self, pocket_type):
+        w = self.pocket_widgets[pocket_type]
+        q = w["var_search"].get().strip().lower()
+        only_owned = w["var_only_owned"].get()
+        tree = w["tree"]
+        tree.delete(*tree.get_children())
+        filtered = []
+
+        for entry in self.catalog:
+            if entry["pocket"] != pocket_type:
+                continue
+            owned = self.bag_counts.get((pocket_type, entry["id"]), 0)
+            if only_owned and owned <= 0:
+                continue
+            if q and q not in entry["name"].lower() and q not in entry.get("desc", "").lower() and q != str(entry["id"]):
+                continue
+            filtered.append(entry)
+            qty_txt = str(owned) if owned > 0 else "—"
+            tree.insert("", tk.END, iid=str(entry["id"]), values=(f"{entry['id']:03d}", entry["name"], entry.get("desc", ""), qty_txt))
+
+        w["filtered"] = filtered
+
+    def _get_selected_entry(self, pocket_type):
+        w = self.pocket_widgets[pocket_type]
+        sel = w["tree"].selection()
+        if not sel:
+            return None
+        sel_id = int(sel[0])
+        for entry in w["filtered"]:
+            if entry["id"] == sel_id:
+                return entry
+        return None
+
+    def _on_tree_select(self, pocket_type):
+        entry = self._get_selected_entry(pocket_type)
+        if not entry:
+            return
+        curr = self.bag_counts.get((pocket_type, entry["id"]), 0)
+        self.pocket_widgets[pocket_type]["lbl_sel"].config(
+            text=f"Seleccionado: {entry['name']} (ID {entry['id']})  •  En tu mochila: {curr}"
+        )
+        self.pocket_widgets[pocket_type]["lbl_desc"].config(
+            text=f"Función: {entry.get('desc', '')}"
+        )
+
+    def _parse_qty(self, pocket_type):
+        raw = self.pocket_widgets[pocket_type]["ent_qty"].get().strip()
+        val = int(raw)
+        if val < 0:
+            raise ValueError("La cantidad debe ser 0 o mayor.")
+        return val
+
+    def _inject_pocket_selection(self, pocket_type):
+        entry = self._get_selected_entry(pocket_type)
+        if not entry:
+            messagebox.showwarning("Sin selección", "Selecciona un elemento de la lista primero.")
+            return
+        try:
+            qty = self._parse_qty(pocket_type)
+        except ValueError:
+            messagebox.showerror("Cantidad inválida", "Ingresa un número entero válido (0 o mayor).")
+            return
+
+        if pocket_type == "ball":
+            self.run_injection_wrapper(balls_custom=[(entry["id"], qty)])
+        elif pocket_type == "mt":
+            self.run_injection_wrapper(mts=[(entry["id"], qty)])
+        else:
+            self.run_injection_wrapper(items_custom=[(entry["id"], qty)])
+
+    def _queue_pocket_selection(self, pocket_type):
+        entry = self._get_selected_entry(pocket_type)
+        if not entry:
+            messagebox.showwarning("Sin selección", "Selecciona un elemento de la lista primero.")
+            return
+        try:
+            qty = self._parse_qty(pocket_type)
+        except ValueError:
+            messagebox.showerror("Cantidad inválida", "Ingresa un número entero válido (0 o mayor).")
+            return
+
+        for idx, (eid, _n, ep, _q) in enumerate(self.queued_items):
+            if eid == entry["id"] and ep == pocket_type:
+                self.queued_items[idx] = (entry["id"], entry["name"], pocket_type, qty)
+                self._update_queue_bars()
+                return
+        self.queued_items.append((entry["id"], entry["name"], pocket_type, qty))
+        self._update_queue_bars()
+
+    def _update_queue_bars(self):
+        count = len(self.queued_items)
+        summary = ", ".join(f"{n} x{q}" for _i, n, _p, q in self.queued_items[:4])
+        if count > 4:
+            summary += f" (+{count - 4} más)"
+        for w in self.pocket_widgets.values():
+            if count > 0:
+                w["lbl_queue"].config(text=f"En cola ({count}): {summary}")
+                w["queue_bar"].pack(fill=tk.X, pady=(8, 0))
+            else:
+                w["queue_bar"].pack_forget()
+
+    def _clear_queue(self):
+        self.queued_items.clear()
+        self._update_queue_bars()
+
+    def _inject_queue(self):
+        if not self.queued_items:
+            return
+        items_c = [(eid, qty) for eid, _n, pocket, qty in self.queued_items if pocket == "item"]
+        balls_c = [(eid, qty) for eid, _n, pocket, qty in self.queued_items if pocket == "ball"]
+        mts_c = [(eid, qty) for eid, _n, pocket, qty in self.queued_items if pocket == "mt"]
+        if self.run_injection_wrapper(items_custom=items_c or None, balls_custom=balls_c or None, mts=mts_c or None):
+            self._clear_queue()
+
+    def _apply_money(self):
+        try:
+            din_raw = self.ent_dinero.get().strip()
+            ban_raw = self.ent_banco.get().strip()
+            din = int(din_raw) if din_raw else None
+            ban = int(ban_raw) if ban_raw else None
+            if din is None and ban is None:
+                messagebox.showinfo("Sin cambios", "Ingresa al menos una cantidad de dinero.")
+                return
+            self.run_injection_wrapper(dinero=din, banco=ban)
+        except ValueError:
+            messagebox.showerror("Formato inválido", "Ingresa números enteros válidos para el dinero.")
 
     def log(self, text):
         self.txt_log.insert(tk.END, text + "\n")
         self.txt_log.see(tk.END)
+        self.lbl_status.config(text=text)
         self.root.update_idletasks()
 
     def refresh_live_status(self):
         if not os.path.exists(inyector_reloaded.SAVE_PATH):
-            self.lbl_dinero.config(text="No encontrado")
+            self.lbl_status.config(text="Archivo de partida no encontrado.")
             return
         try:
-            data = open(inyector_reloaded.SAVE_PATH, 'rb').read()
+            data = open(inyector_reloaded.SAVE_PATH, "rb").read()
             st = inyector_reloaded.load_save_state(data)
-            glb = st['glb']
-            obj_18 = st['obj_18']
-            
-            # Dinero
+            glb = st["glb"]
+            obj_18 = st["obj_18"]
+
             din = int(glb.dinero)
             ban = int(obj_18.ingreso)
-            self.lbl_dinero.config(text=f"{din:,} €".replace(",", "."))
-            self.lbl_banco.config(text=f"{ban:,} €".replace(",", "."))
-            
-            # Master balls
-            mb = 0
+            self.stat_labels["dinero"].config(text=f"{din:,} €".replace(",", "."))
+            self.stat_labels["banco"].config(text=f"{ban:,} €".replace(",", "."))
+
+            self.bag_counts = {}
             for i in range(30):
-                if int(glb.ObBall[i]) == 4:
-                    mb = int(glb.nObBall[i])
-                    break
-            self.lbl_mb.config(text=str(mb))
-            
-            # Caramelos
-            car = 0
+                bid = int(glb.ObBall[i])
+                bn = int(glb.nObBall[i])
+                if bid > 0 and bn > 0:
+                    self.bag_counts[("ball", bid)] = bn
             for i in range(420):
-                if int(glb.ObItem[i]) == 38:
-                    car = int(glb.nObItem[i])
-                    break
-            self.lbl_caramelos.config(text=str(car))
+                iid = int(glb.ObItem[i])
+                inq = int(glb.nObItem[i])
+                if iid > 0 and inq > 0:
+                    self.bag_counts[("item", iid)] = inq
 
-            # MTs
+            mb = self.bag_counts.get(("ball", 4), 0)
+            car = self.bag_counts.get(("item", 38), 0)
             mts_cnt = 0
-            for i in range(1001):
-                if int(glb.ObMT[i]) > 0 and int(glb.nObMT[i]) > 0:
+            for i in range(1000):
+                mid = int(glb.ObMT[i])
+                mq = int(glb.nObMT[i])
+                if mid > 0 and mq > 0:
+                    self.bag_counts[("mt", mid)] = mq
                     mts_cnt += 1
-            self.lbl_mts.config(text=f"{mts_cnt} MTs")
 
-            self.log("[Info] Estado del guardado sincronizado correctamente.")
+            self.stat_labels["mb"].config(text=str(mb))
+            self.stat_labels["caramelos"].config(text=f"{car}  /  {mts_cnt} MTs")
+
+            self._refresh_pocket_tree("item")
+            self._refresh_pocket_tree("ball")
+            self._refresh_pocket_tree("mt")
+            self._on_tree_select("item")
+            self._on_tree_select("ball")
+            self._on_tree_select("mt")
+            self.log("[Info] Partida sincronizada correctamente.")
         except Exception as e:
-            self.log(f"[Error] No se pudo leer el guardado: {e}")
+            self.log(f"[Error] No se pudo leer la partida: {e}")
 
     def run_injection_wrapper(self, **kwargs):
-        self.txt_log.delete("1.0", tk.END)
         self.log(">>> Iniciando inyección segura y justificada...")
         try:
-            inyector_reloaded.execute_injection(**kwargs)
-            self.log("[Éxito] Inyección completada y guardada sin anomalías.")
-            messagebox.showinfo("Inyección Completada", "¡La partida fue modificada y verificada al 100% con éxito!\nYa puedes jugar sin riesgo de error.")
+            ok = inyector_reloaded.execute_injection(**kwargs)
+            if not ok:
+                raise RuntimeError("Falló la verificación de seguridad. Se restauró el respaldo original.")
+            self.log("[Éxito] Inyección completada y verificada al 100% sin anomalías.")
+            messagebox.showinfo("Inyección Completada", "¡Cambios aplicados en tu mochila y verificados al 100%!\nPuedes abrir el juego sin riesgo.")
             self.refresh_live_status()
+            return True
         except Exception as e:
             self.log(f"[Error] Falló la inyección: {e}")
-            messagebox.showerror("Error", f"Ocurrió un problema: {e}")
-
-    def apply_pack_aventura(self):
-        self.run_injection_wrapper(masterballs=10, caramelos=50, ultraballs=50)
-
-    def apply_pack_vitaminas(self):
-        self.run_injection_wrapper(vitaminas=30)
-
-    def apply_pack_dinero(self):
-        self.run_injection_wrapper(dinero=999999, banco=1000000)
-
-    def apply_pack_mts(self):
-        self.run_injection_wrapper(mts=True)
-
-    def apply_custom_injection(self):
-        try:
-            mb = int(self.ent_mb.get().strip()) if self.ent_mb.get().strip() else None
-            car = int(self.ent_caramelos.get().strip()) if self.ent_caramelos.get().strip() else None
-            din = int(self.ent_dinero.get().strip()) if self.ent_dinero.get().strip() else None
-            ban = int(self.ent_banco.get().strip()) if self.ent_banco.get().strip() else None
-            
-            self.run_injection_wrapper(dinero=din, banco=ban, masterballs=mb, caramelos=car)
-        except ValueError:
-            messagebox.showerror("Error de formato", "Por favor ingresa números enteros válidos en los campos.")
+            messagebox.showerror("Error", f"Ocurrió un problema:\n{e}")
+            return False
 
     def launch_game(self):
         exe_path = r"Proyecto Reloaded The Last Beta 1.9.2.2 Full\Proyecto Reloaded The Last Beta 1.9.2.2 Full.exe"
@@ -248,8 +599,8 @@ class InyectorApp:
         else:
             messagebox.showerror("No encontrado", f"No se encontró el ejecutable en:\n{exe_path}")
 
+
 if __name__ == "__main__":
     root = tk.Tk()
     app = InyectorApp(root)
     root.mainloop()
-

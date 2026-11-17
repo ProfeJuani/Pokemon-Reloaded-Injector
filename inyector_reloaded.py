@@ -381,13 +381,121 @@ SHOP_CASINO_MTS = [
     (5117, "MT73 Reflejo (Centro Comercial)")
 ]
 
-def execute_injection(dinero=None, banco=None, masterballs=None, ultraballs=None, caramelos=None, vitaminas=None, items_custom=None, mts=None):
+BALL_IDS = set(range(1, 14)) | set(range(472, 484)) | {522}
+KEY_ITEM_IDS = {14, 484, 568, 658, 674, 679} | set(range(152, 194)) | set(range(607, 618))
+
+def _decode_game_text(raw):
+    res = "".join(chr(M_10010[ord(c)]) for c in raw)
+    for k, v in (
+        ("&{a}", "á"), ("&{e}", "é"), ("&{i}", "í"), ("&{o}", "ó"), ("&{u}", "ú"), ("&{n}", "ñ"),
+        ("&{A}", "Á"), ("&{E}", "É"), ("&{I}", "Í"), ("&{O}", "Ó"), ("&{U}", "Ú"), ("&{N}", "Ñ"),
+        ("&{!}", "¡"), ("&{?}", "¿"),
+    ):
+        res = res.replace(k, v)
+    return res.strip()
+
+def _load_desc_lines():
+    desc_path = os.path.join(GAME_DIR, "data", "text", "es", "txt_obj_desc.dll")
+    if not os.path.exists(desc_path):
+        desc_path = os.path.join(GAME_DIR, "data", "text", "en", "txt_obj_desc.dll")
+    if not os.path.exists(desc_path):
+        return []
+    with open(desc_path, "r", encoding="latin-1") as f:
+        return [_decode_game_text(l.rstrip("\r\n")) for l in f]
+
+def _get_item_description(idx, name, desc_lines):
+    raw = ""
+    if desc_lines:
+        if 1 <= idx <= 90 and idx - 1 < len(desc_lines):
+            raw = desc_lines[idx - 1]
+        elif 91 <= idx <= 107 and 90 < len(desc_lines):
+            raw = desc_lines[90].replace("$par1$", name.replace("Tabla ", "tipo "))
+        elif idx == 108 and 91 < len(desc_lines):
+            raw = desc_lines[91]
+        elif 109 <= idx <= 193 and idx - 17 < len(desc_lines):
+            raw = desc_lines[idx - 17]
+        elif 291 <= idx <= 383 and idx - 114 < len(desc_lines):
+            raw = desc_lines[idx - 114]
+        elif 384 <= idx <= 400 and 270 < len(desc_lines):
+            raw = desc_lines[270].replace("$par1$", name.replace("Gema ", ""))
+        elif 401 <= idx <= 471 and idx - 129 < len(desc_lines):
+            raw = desc_lines[idx - 129]
+        elif 472 <= idx <= 483 and idx - 128 < len(desc_lines):
+            raw = desc_lines[idx - 128]
+        elif 638 <= idx <= 821 and idx + 939 < len(desc_lines):
+            cand = desc_lines[idx + 939]
+            if not cand.startswith(f"{idx} "):
+                raw = cand
+
+    if raw:
+        return raw.replace("$par1$", "la tecla asignada")
+
+    if name.startswith("MT") or name.startswith("MO"):
+        kind = "Máquina Oculta" if name.startswith("MO") else "Máquina Técnica"
+        move = name.split(" ", 1)[1] if " " in name else name
+        return f"{kind}: enseña el movimiento {move}."
+    if "stal Z" in name:
+        return "Cristal Z: permite ejecutar el movimiento Z correspondiente en combate."
+    if name.startswith("Teralito "):
+        return f"Cambia el Teratipo de un Pokémon a {name.replace('Teralito ', '')}."
+    if name.startswith("Mochi "):
+        return "Modifica o reinicia los puntos de esfuerzo (EVs) de un Pokémon."
+    if name.startswith("Incienso "):
+        return "Objeto equipable que potencia movimientos o habilita cría especial."
+    if any(name.endswith(sfx) for sfx in ("ita", "ita X", "ita Y", "ita Z")):
+        return "Megapiedra: permite megaevolucionar en combate al Pokémon correspondiente."
+    if name == "Ente Ball":
+        return "Poké Ball especial diseñada para capturar Ultraentes."
+    return "Objeto especial del juego."
+
+def load_item_catalog():
+    """Carga el catálogo de objetos y Poké Balls seguros desde txt_obj.dll."""
+    txt_path = os.path.join(GAME_DIR, "data", "text", "es", "txt_obj.dll")
+    if not os.path.exists(txt_path):
+        txt_path = os.path.join(GAME_DIR, "data", "text", "en", "txt_obj.dll")
+    if not os.path.exists(txt_path):
+        return []
+
+    desc_lines = _load_desc_lines()
+    catalog = []
+    with open(txt_path, "r", encoding="latin-1") as f:
+        for idx, line in enumerate(f, start=1):
+            name = _decode_game_text(line.rstrip("\r\n"))
+            if not name or name in ("---", "???"):
+                continue
+            if idx in BALL_IDS:
+                catalog.append({"id": idx, "name": name, "pocket": "ball", "desc": _get_item_description(idx, name, desc_lines)})
+            elif idx in KEY_ITEM_IDS:
+                continue
+            elif name.startswith("Baya ") or name.startswith("MT") or name.startswith("MO"):
+                continue
+            else:
+                catalog.append({"id": idx, "name": name, "pocket": "item", "desc": _get_item_description(idx, name, desc_lines)})
+    return catalog
+
+def load_mt_catalog():
+    """Carga el catálogo completo de MTs y MOs oficiales desde txt_obj.dll."""
+    txt_path = os.path.join(GAME_DIR, "data", "text", "es", "txt_obj.dll")
+    if not os.path.exists(txt_path):
+        txt_path = os.path.join(GAME_DIR, "data", "text", "en", "txt_obj.dll")
+    if not os.path.exists(txt_path):
+        return []
+
+    desc_lines = _load_desc_lines()
+    mts = []
+    with open(txt_path, "r", encoding="latin-1") as f:
+        for idx, line in enumerate(f, start=1):
+            name = _decode_game_text(line.rstrip("\r\n"))
+            if name.startswith("MT") or name.startswith("MO"):
+                mts.append({"id": idx, "name": name, "pocket": "mt", "desc": _get_item_description(idx, name, desc_lines)})
+    return mts
+
+def execute_injection(dinero=None, banco=None, masterballs=None, ultraballs=None, caramelos=None, vitaminas=None, items_custom=None, balls_custom=None, mts=None):
     if not check_game_process():
-        sys.exit(1)
+        raise RuntimeError("Pokémon Reloaded está en ejecución. Ciérralo antes de inyectar.")
         
     if not os.path.exists(SAVE_PATH):
-        print(f"Error: No se encuentra el archivo de partida en {SAVE_PATH}")
-        sys.exit(1)
+        raise FileNotFoundError(f"No se encuentra el archivo de partida en {SAVE_PATH}")
         
     orig_data = open(SAVE_PATH, 'rb').read()
     
@@ -444,46 +552,73 @@ def execute_injection(dinero=None, banco=None, masterballs=None, ultraballs=None
         replacements['obj_3.vochoban'] = vochoban
         print(f"[+] Dinero en banco: {obj_18.ingreso} € -> {target_banco} € (vsieteban={vsieteban})")
 
+    def _set_pocket_slot(arr, narr, prefix, capacity, item_id, count):
+        count = max(0, int(count))
+        for i in range(capacity):
+            if int(arr[i]) == item_id:
+                if count == 0:
+                    arr[i] = 0
+                    narr[i] = 0
+                    replacements[f'{prefix}[{i}]'] = 0
+                    replacements[f'glb.n{prefix[4:]}[{i}]'] = 0
+                else:
+                    narr[i] = count
+                    replacements[f'glb.n{prefix[4:]}[{i}]'] = count
+                return True
+        if count == 0:
+            return False
+        for i in range(capacity):
+            if int(arr[i]) == 0:
+                arr[i] = item_id
+                narr[i] = count
+                replacements[f'{prefix}[{i}]'] = item_id
+                replacements[f'glb.n{prefix[4:]}[{i}]'] = count
+                return True
+        raise RuntimeError(f"La mochila ({prefix}) está llena (máximo {capacity} espacios).")
+
+    def _justify_masterballs():
+        has = 0
+        for i in range(30):
+            if int(glb.ObBall[i]) == 4: has += int(glb.nObBall[i])
+        for i in range(1000):
+            if int(glb.ObPC[i]) == 4: has += int(glb.nObPC[i])
+        for i in range(6):
+            if int(glb.objpoke1[i]) == 4: has += 1
+        for c in range(1, int(glb.NumCajas) + 1):
+            for j in range(30):
+                if int(glb.boxobjpoke[c, j]) == 4: has += 1
+        ev_1435 = int(obj_18.ev_1435) if int(obj_18.ev_1435) > 0 else 1
+        req_ev1434 = max(1, has - ev_1435 - 8 + 2)
+        replacements['obj_18.ev_1434'] = req_ev1434
+        print(f"    [*] Justificación legal de Master Ball calibrada: ev_1434={req_ev1434} (Total={has}, Límite={req_ev1434 + 1 + ev_1435 + 7})")
+
     # C. Mochila de Balls
     ball_changes = False
-    
+
     def set_ball(ball_id, count):
         nonlocal ball_changes
-        # Buscar si ya existe
-        found = False
-        for i in range(30):
-            if int(glb.ObBall[i]) == ball_id:
-                glb.nObBall[i] = count
-                replacements[f'glb.nObBall[{i}]'] = count
-                found = True
-                break
-        if not found:
-            # Buscar primer hueco libre
-            for i in range(30):
-                if int(glb.ObBall[i]) == 0:
-                    glb.ObBall[i] = ball_id
-                    glb.nObBall[i] = count
-                    replacements[f'glb.ObBall[{i}]'] = ball_id
-                    replacements[f'glb.nObBall[{i}]'] = count
-                    break
+        _set_pocket_slot(glb.ObBall, glb.nObBall, 'glb.ObBall', 30, ball_id, count)
         ball_changes = True
 
     if masterballs is not None:
         target_mb = int(masterballs)
         set_ball(4, target_mb)
         print(f"[+] Master Balls: {target_mb} unidades")
-        
-        # JUSTIFICACIÓN HISTORIA (0F210000_0F2DC780.gml)
-        # has <= dis = ev_1434 + 1 + ev_1435 + 7
-        ev_1435 = int(obj_18.ev_1435) if int(obj_18.ev_1435) > 0 else 1
-        req_ev1434 = max(1, target_mb - ev_1435 - 8 + 2)
-        replacements['obj_18.ev_1434'] = req_ev1434
-        print(f"    [*] Justificación legal de Master Ball calibrada: ev_1434={req_ev1434} (Límite permitido={req_ev1434 + 1 + ev_1435 + 7})")
+        _justify_masterballs()
 
     if ultraballs is not None:
         target_ub = int(ultraballs)
         set_ball(3, target_ub)
         print(f"[+] Ultra Balls: {target_ub} unidades")
+
+    if balls_custom:
+        for b_id, b_count in balls_custom:
+            b_id = int(b_id)
+            b_count = int(b_count)
+            set_ball(b_id, b_count)
+            print(f"[+] Ball personalizada (ID {b_id}): {b_count} unidades")
+            if b_id == 4:
+                _justify_masterballs()
 
     if ball_changes:
         secovbl = int(obj_3.secovbl)
@@ -498,24 +633,10 @@ def execute_injection(dinero=None, banco=None, masterballs=None, ultraballs=None
 
     # D. Mochila de Objetos
     item_changes = False
-    
+
     def set_item(item_id, count):
         nonlocal item_changes
-        found = False
-        for i in range(420):
-            if int(glb.ObItem[i]) == item_id:
-                glb.nObItem[i] = count
-                replacements[f'glb.nObItem[{i}]'] = count
-                found = True
-                break
-        if not found:
-            for i in range(420):
-                if int(glb.ObItem[i]) == 0:
-                    glb.ObItem[i] = item_id
-                    glb.nObItem[i] = count
-                    replacements[f'glb.ObItem[{i}]'] = item_id
-                    replacements[f'glb.nObItem[{i}]'] = count
-                    break
+        _set_pocket_slot(glb.ObItem, glb.nObItem, 'glb.ObItem', 420, item_id, count)
         item_changes = True
 
     if caramelos is not None:
@@ -531,8 +652,29 @@ def execute_injection(dinero=None, banco=None, masterballs=None, ultraballs=None
 
     if items_custom:
         for it_id, it_count in items_custom:
-            set_item(it_id, it_count)
-            print(f"[+] Objeto personalizado (ID {it_id}): {it_count} unidades")
+            it_id = int(it_id)
+            it_count = int(it_count)
+            if it_id in BALL_IDS:
+                set_ball(it_id, it_count)
+                print(f"[+] Ball personalizada (ID {it_id}): {it_count} unidades")
+                if it_id == 4:
+                    _justify_masterballs()
+            elif it_id in KEY_ITEM_IDS:
+                raise ValueError(f"El objeto ID {it_id} es un Objeto Clave y no se puede inyectar en la mochila normal.")
+            else:
+                set_item(it_id, it_count)
+                print(f"[+] Objeto personalizado (ID {it_id}): {it_count} unidades")
+
+    if ball_changes:
+        secovbl = int(obj_3.secovbl)
+        calc_vsietevbl = (secovbl + mask1) * 8
+        for i in range(30):
+            b_id = int(glb.ObBall[i])
+            b_n = int(glb.nObBall[i])
+            if b_id > 0 and b_n > 0:
+                calc_vsietevbl += (i * 7) + (b_id * 21) + (b_n * 39)
+        replacements['obj_3.vsietevbl'] = calc_vsietevbl
+        print(f"    [*] Checksum de Balls recalculado: vsietevbl={calc_vsietevbl}")
 
     if item_changes:
         secovob = int(obj_3.secovob)
@@ -550,26 +692,51 @@ def execute_injection(dinero=None, banco=None, masterballs=None, ultraballs=None
     if mts is not None:
         mt_list_to_inject = []
         if mts is True:
-            mt_list_to_inject = [mid for mid, name in SHOP_CASINO_MTS]
+            mt_list_to_inject = [(mid, 1) for mid, _name in SHOP_CASINO_MTS]
+        elif mts == "all":
+            mt_list_to_inject = [(m["id"], 1) for m in load_mt_catalog() if m["name"].startswith("MT")]
         elif isinstance(mts, (list, tuple)):
-            mt_list_to_inject = mts
-            
+            for item in mts:
+                if isinstance(item, (list, tuple)):
+                    mt_list_to_inject.append((int(item[0]), max(0, int(item[1]))))
+                else:
+                    mt_list_to_inject.append((int(item), 1))
+
         mt_slots = {}
-        for i in range(1001):
+        for i in range(1000):
             mid = int(glb.ObMT[i])
             qty = int(glb.nObMT[i])
             if mid > 0 and qty > 0:
                 mt_slots[i] = (mid, qty)
-                
+
         next_slot = max(mt_slots.keys(), default=-1) + 1
-        for mt_id in mt_list_to_inject:
-            already = any(mid == mt_id for mid, qty in mt_slots.values())
-            if not already:
-                mt_slots[next_slot] = (mt_id, 1)
+        for mt_id, target_qty in mt_list_to_inject:
+            found_slot = None
+            for slot_idx, (mid, _q) in mt_slots.items():
+                if mid == mt_id:
+                    found_slot = slot_idx
+                    break
+            if found_slot is not None:
+                if target_qty == 0:
+                    mt_slots.pop(found_slot, None)
+                    replacements[f'glb.ObMT[{found_slot}]'] = 0
+                    replacements[f'glb.nObMT[{found_slot}]'] = 0
+                    glb.ObMT[found_slot] = 0
+                    glb.nObMT[found_slot] = 0
+                    mt_changes = True
+                elif mt_slots[found_slot][1] != target_qty:
+                    mt_slots[found_slot] = (mt_id, target_qty)
+                    replacements[f'glb.nObMT[{found_slot}]'] = target_qty
+                    glb.nObMT[found_slot] = target_qty
+                    mt_changes = True
+            elif target_qty > 0:
+                if next_slot >= 1000:
+                    raise RuntimeError("La mochila de MTs está llena (máximo 1000 espacios).")
+                mt_slots[next_slot] = (mt_id, target_qty)
                 replacements[f'glb.ObMT[{next_slot}]'] = mt_id
-                replacements[f'glb.nObMT[{next_slot}]'] = 1
+                replacements[f'glb.nObMT[{next_slot}]'] = target_qty
                 glb.ObMT[next_slot] = mt_id
-                glb.nObMT[next_slot] = 1
+                glb.nObMT[next_slot] = target_qty
                 next_slot += 1
                 mt_changes = True
                 
