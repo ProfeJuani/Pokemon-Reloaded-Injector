@@ -119,8 +119,22 @@ class InyectorApp:
             self.nav_buttons[key] = btn
 
         # Botones inferiores del sidebar
-        bottom_bar = tk.Frame(sidebar, bg=self.bg_sidebar, padx=12, pady=14)
+        bottom_bar = tk.Frame(sidebar, bg=self.bg_sidebar, padx=12, pady=12)
         bottom_bar.pack(side=tk.BOTTOM, fill=tk.X)
+
+        tk.Button(
+            bottom_bar, text="📥 Bajar de la Nube", bg="#0284c7", fg="#ffffff",
+            activebackground="#0369a1", activeforeground="#ffffff",
+            font=("Segoe UI", 8, "bold"), bd=0, pady=6, cursor="hand2",
+            command=self.sync_pull_cloud,
+        ).pack(fill=tk.X, pady=(0, 5))
+
+        tk.Button(
+            bottom_bar, text="📤 Subir a la Nube", bg="#0d9488", fg="#ffffff",
+            activebackground="#0f766e", activeforeground="#ffffff",
+            font=("Segoe UI", 8, "bold"), bd=0, pady=6, cursor="hand2",
+            command=self.sync_push_cloud,
+        ).pack(fill=tk.X, pady=(0, 8))
 
         tk.Button(
             bottom_bar, text="🔄 Recargar Partida", bg=self.bg_card, fg=self.fg_text,
@@ -589,6 +603,35 @@ class InyectorApp:
             self.log(f"[Error] Falló la inyección: {e}")
             messagebox.showerror("Error", f"Ocurrió un problema:\n{e}")
             return False
+
+    def _run_cloud_bat(self, bat_name, start_msg, ok_msg):
+        self.log(start_msg)
+        bat_path = os.path.abspath(bat_name)
+        if not os.path.exists(bat_path):
+            messagebox.showerror("Error", f"No se encontró {bat_name}")
+            return
+        res = subprocess.run(["cmd", "/c", bat_path], capture_output=True, text=True)
+        if res.returncode == 0:
+            self.log(f"[Éxito] {ok_msg}")
+            messagebox.showinfo("Nube", ok_msg)
+            self.refresh_live_status()
+        else:
+            self.log(f"[Error Nube] {res.stderr or res.stdout}")
+            messagebox.showerror("Error Nube", f"No se pudo completar {bat_name}.")
+
+    def sync_pull_cloud(self):
+        self._run_cloud_bat(
+            "Descargar_Partida_Nube.bat",
+            ">>> Sincronizando: Descargando partida desde la nube (GitHub)...",
+            "¡Partida descargada y sincronizada desde la nube con éxito!",
+        )
+
+    def sync_push_cloud(self):
+        self._run_cloud_bat(
+            "Subir_Partida_Nube.bat",
+            ">>> Sincronizando: Subiendo partida actual a la nube (GitHub)...",
+            "¡Partida respaldada y subida a tu repositorio de guardados en GitHub!",
+        )
 
     def launch_game(self):
         exe_path = r"Proyecto Reloaded The Last Beta 1.9.2.2 Full\Proyecto Reloaded The Last Beta 1.9.2.2 Full.exe"
