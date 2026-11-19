@@ -819,7 +819,9 @@ def execute_injection(dinero=None, banco=None, masterballs=None, ultraballs=None
             sex = int(spec.get('sex', 1))
             atks = list(spec.get('attacks', [17, 197, 41, 16])) + [0, 0, 0, 0]
             a1, a2, a3, a4 = int(atks[0]), int(atks[1]), int(atks[2]), int(atks[3])
-            selue = int(spec.get('selue', 9200000000 + ((pk_id * 7919 + slot * 104729 + lvl * 997) % 700000000)))
+            aux_mask = (mask1 + 7 + 5000) if (mask1 + 7 < 5000) else (mask1 + 7)
+            aux_ntv = (pk_id * 7919 + slot * 104729 + lvl * 997) % 1000000
+            selue = int(spec.get('selue', ((aux_mask - abs(pk_id)) * 1000000) + aux_ntv))
             isep = int(spec.get('isep', 50))
             nick = str(spec.get('nickname', ''))
             ot = str(spec.get('ot', ''))
@@ -1044,7 +1046,7 @@ if __name__ == "__main__":
         if args.item:
             for it_id, it_cnt in args.item:
                 items_c.append((int(it_id), int(it_cnt)))
-        box_pk = [dict(p, box=6) for p in ADVENTURE_DREAM_TEAM] if args.team_box6 else None
+        box_pk = [dict(p, box=6, slot=idx) for idx, p in enumerate(ADVENTURE_DREAM_TEAM)] if args.team_box6 else None
         execute_injection(
             dinero=args.dinero,
             banco=args.banco,

@@ -755,7 +755,7 @@ class InyectorApp:
         self.run_injection_wrapper(box_pokemon=[spec])
 
     def _inject_dream_team_box6(self):
-        team = [dict(p, box=6) for p in inyector_reloaded.ADVENTURE_DREAM_TEAM]
+        team = [dict(p, box=6, slot=idx) for idx, p in enumerate(inyector_reloaded.ADVENTURE_DREAM_TEAM)]
         self.run_injection_wrapper(box_pokemon=team)
 
     def launch_game(self):
