@@ -490,7 +490,47 @@ def load_mt_catalog():
                 mts.append({"id": idx, "name": name, "pocket": "mt", "desc": _get_item_description(idx, name, desc_lines)})
     return mts
 
-def execute_injection(dinero=None, banco=None, masterballs=None, ultraballs=None, caramelos=None, vitaminas=None, items_custom=None, balls_custom=None, mts=None):
+def load_pokemon_catalog():
+    """Carga el catálogo completo de Pokémon desde txt_pkmn.dll."""
+    txt_path = os.path.join(GAME_DIR, "data", "text", "es", "txt_pkmn.dll")
+    if not os.path.exists(txt_path):
+        txt_path = os.path.join(GAME_DIR, "data", "text", "en", "txt_pkmn.dll")
+    if not os.path.exists(txt_path):
+        return []
+    res = []
+    with open(txt_path, "r", encoding="latin-1") as f:
+        for idx, line in enumerate(f, start=1):
+            name = _decode_game_text(line.rstrip("\r\n"))
+            if name and name != "-" and not name.startswith("?"):
+                res.append({"id": idx, "name": name})
+    return res
+
+def load_attack_catalog():
+    """Carga el catálogo completo de ataques/movimientos desde txt_attack.dll."""
+    txt_path = os.path.join(GAME_DIR, "data", "text", "es", "txt_attack.dll")
+    if not os.path.exists(txt_path):
+        txt_path = os.path.join(GAME_DIR, "data", "text", "en", "txt_attack.dll")
+    if not os.path.exists(txt_path):
+        return []
+    res = []
+    with open(txt_path, "r", encoding="latin-1") as f:
+        for idx, line in enumerate(f, start=1):
+            name = _decode_game_text(line.rstrip("\r\n"))
+            if name and name != "-":
+                res.append({"id": idx, "name": name})
+    return res
+
+# Equipo Élite de Aventura para Pokémon Reloaded (Núcleo FWG + Dragón/Hada/Acero)
+ADVENTURE_DREAM_TEAM = [
+    {"pkmn_id": 445, "name": "Garchomp",   "level": 42, "iv": 999999, "attacks": [17, 197, 446, 212], "item_id": 303, "sex": 1},
+    {"pkmn_id": 282, "name": "Gardevoir",  "level": 42, "iv": 999999, "attacks": [43, 566, 41, 16],   "item_id": 303, "sex": 2},
+    {"pkmn_id": 753, "name": "Greninja",   "level": 42, "iv": 999999, "attacks": [9, 73, 411, 578],   "item_id": 303, "sex": 1},
+    {"pkmn_id": 758, "name": "Talonflame", "level": 42, "iv": 999999, "attacks": [202, 421, 2, 377],  "item_id": 303, "sex": 1},
+    {"pkmn_id": 376, "name": "Metagross",  "level": 42, "iv": 999999, "attacks": [338, 432, 30, 17],  "item_id": 303, "sex": 0},
+    {"pkmn_id": 254, "name": "Sceptile",   "level": 42, "iv": 999999, "attacks": [372, 252, 414, 419],"item_id": 303, "sex": 1},
+]
+
+def execute_injection(dinero=None, banco=None, masterballs=None, ultraballs=None, caramelos=None, vitaminas=None, items_custom=None, balls_custom=None, mts=None, box_pokemon=None):
     if not check_game_process():
         raise RuntimeError("Pokémon Reloaded está en ejecución. Ciérralo antes de inyectar.")
         
@@ -751,6 +791,86 @@ def execute_injection(dinero=None, banco=None, masterballs=None, ultraballs=None
             replacements['obj_3.vsietevmt'] = new_vsietevmt
             print(f"    [*] Checksum de MTs recalculado: vsietevmt={new_vsietevmt}")
 
+    # F. Inyección de Pokémon en Cajas del PC (recalcula vsietecj y vsietecj2)
+    if box_pokemon:
+        modified_boxes = set()
+        num_cajas = int(glb.NumCajas)
+        base_date = int(glb.lastDateStored) if int(glb.lastDateStored) > 0 else 121649369
+        next_uid = int(glb.fy_001) if int(glb.fy_001) > 0 else 100
+        for spec in box_pokemon:
+            c = int(spec.get('box', 6))
+            if c < 1 or c > num_cajas:
+                raise ValueError(f"Caja {c} fuera de rango (1..{num_cajas}).")
+            slot = spec.get('slot', None)
+            if slot is None:
+                for j in range(30):
+                    if int(glb.boxpkmn[c, j]) == 0:
+                        slot = j
+                        break
+            if slot is None:
+                raise ValueError(f"La Caja {c} está llena (30/30).")
+            slot = int(slot)
+
+            pk_id = int(spec['pkmn_id'])
+            lvl = max(1, min(100, int(spec.get('level', 42))))
+            exp = int(spec.get('exp', lvl ** 3))
+            iv = max(0, min(999999, int(spec.get('iv', 999999))))
+            item_id = int(spec.get('item_id', 0))
+            sex = int(spec.get('sex', 1))
+            atks = list(spec.get('attacks', [17, 197, 41, 16])) + [0, 0, 0, 0]
+            a1, a2, a3, a4 = int(atks[0]), int(atks[1]), int(atks[2]), int(atks[3])
+            selue = int(spec.get('selue', 9200000000 + ((pk_id * 7919 + slot * 104729 + lvl * 997) % 700000000)))
+            isep = int(spec.get('isep', 50))
+            nick = str(spec.get('nickname', ''))
+            ot = str(spec.get('ot', ''))
+            ball = int(spec.get('ball', 3))  # 3 = Ultra Ball
+            next_uid += 1
+
+            field_vals = {
+                'boxpkmn': pk_id, 'boxnivel': lvl, 'boxexp': exp, 'boxIV': iv,
+                'boxobjpoke': item_id, 'boxpkmnsex': sex,
+                'boxat1': a1, 'boxat2': a2, 'boxat3': a3, 'boxat4': a4,
+                'boxselue_pk': selue,
+                'boxinfo0': ball, 'boxinfo1': lvl, 'boxinfo2': 19, 'boxinfo3': 0,
+                'boxinfo4': nick, 'boxinfo5': ot,
+                'boxinfo6': isep, 'boxinfo7': base_date, 'boxinfo8': base_date,
+                'boxinfo9': 255, 'boxinfo10': 0, 'boxinfo11': 0, 'boxinfo12': 0,
+                'boxinfo13': isep, 'boxinfo14': selue, 'boxinfo15': next_uid,
+            }
+            for fname, fval in field_vals.items():
+                getattr(glb, fname)[c, slot] = fval
+                replacements[f'glb.{fname}[{c},{slot}]'] = fval
+
+            modified_boxes.add(c)
+            label = spec.get('name', f'ID {pk_id}')
+            print(f"[+] Caja {c} Slot {slot + 1}: {label} (ID {pk_id}) Nv.{lvl} IV={iv} Atks=[{a1},{a2},{a3},{a4}]")
+
+        glb.fy_001 = next_uid
+        replacements['glb.fy_001'] = next_uid
+
+        for c in sorted(modified_boxes):
+            v7_1 = 0
+            for j in range(30):
+                v7_1 += (j * 2) + (int(glb.boxpkmn[c, j]) * 11) + (int(glb.boxnivel[c, j]) * 7) + int(glb.boxexp[c, j]) + 131
+            v7_1 += (((int(obj_3.secocj[c]) + mask3) * 43) + ((29 + mask2) * 3 * c))
+            obj_3.vsietecj[c] = v7_1
+            replacements[f'obj_3.vsietecj[{c}]'] = v7_1
+
+            v7_2 = 0
+            for j in range(30):
+                v7_2 += (j * 2) + (int(glb.boxIV[c, j]) * 13) + 41
+                v7_2 += (j * 4) + (int(glb.boxobjpoke[c, j]) * 23) + 41
+                v7_2 += (j * 3) + (int(glb.boxpkmnsex[c, j]) * 15) + 41
+                v7_2 += (j * 5) + (int(glb.boxselue_pk[c, j]) * 16) + 41
+                v7_2 += (j * 7) + (int(glb.boxat1[c, j]) * 11) + 41
+                v7_2 += (j * 9) + (int(glb.boxat2[c, j]) * 12) + 41
+                v7_2 += (j * 6) + (int(glb.boxat3[c, j]) * 19) + 41
+                v7_2 += (j * 8) + (int(glb.boxat4[c, j]) * 14) + 41
+            v7_2 += (((int(obj_3.secocj2[c]) + mask2) * 23) + ((19 + mask1) * 2 * c))
+            obj_3.vsietecj2[c] = v7_2
+            replacements[f'obj_3.vsietecj2[{c}]'] = v7_2
+            print(f"    [*] Checksums Caja {c} recalculados: vsietecj={v7_1}, vsietecj2={v7_2}")
+
     # 3. Aplicar parche binario sobre el stream completo
     pos = 0
     new_data = bytearray()
@@ -864,6 +984,18 @@ def execute_injection(dinero=None, banco=None, masterballs=None, ultraballs=None
     code_patch = code_patch.replace("glb.nObBall[i]=ex(9342)", "glb.nObBall[i]=ex(9342, f'glb.nObBall[{i}]')")
     code_patch = code_patch.replace("glb.ObMT[i]=ex(9342)", "glb.ObMT[i]=ex(9342, f'glb.ObMT[{i}]')")
     code_patch = code_patch.replace("glb.nObMT[i]=ex(9342)", "glb.nObMT[i]=ex(9342, f'glb.nObMT[{i}]')")
+    code_patch = code_patch.replace("glb.fy_001=ex(9342)", "glb.fy_001=ex(9342, 'glb.fy_001')")
+    code_patch = code_patch.replace("obj_3.vsietecj[i]=ex(9342)", "obj_3.vsietecj[i]=ex(9342, f'obj_3.vsietecj[{i}]')")
+    code_patch = code_patch.replace("obj_3.vsietecj2[i]=ex(9342)", "obj_3.vsietecj2[i]=ex(9342, f'obj_3.vsietecj2[{i}]')")
+
+    for bf in ('boxpkmn', 'boxnivel', 'boxexp', 'boxIV', 'boxobjpoke', 'boxpkmnsex',
+               'boxat1', 'boxat2', 'boxat3', 'boxat4', 'boxselue_pk',
+               'boxinfo0', 'boxinfo1', 'boxinfo2', 'boxinfo3',
+               'boxinfo6', 'boxinfo7', 'boxinfo8', 'boxinfo9', 'boxinfo10',
+               'boxinfo11', 'boxinfo12', 'boxinfo13', 'boxinfo14', 'boxinfo15'):
+        code_patch = code_patch.replace(f"glb.{bf}[i,j]=ex(9342)", f"glb.{bf}[i,j]=ex(9342, f'glb.{bf}[{{i}},{{j}}]')")
+    for bf in ('boxinfo4', 'boxinfo5'):
+        code_patch = code_patch.replace(f"glb.{bf}[i,j]=ex(9343)", f"glb.{bf}[i,j]=ex(9343, f'glb.{bf}[{{i}},{{j}}]')")
 
     exec(code_patch, locs_p, locs_p)
     new_data.extend(orig_data[pos:])
@@ -902,15 +1034,17 @@ if __name__ == "__main__":
     parser.add_argument("--vitaminas", type=int, help="Cantidad de cada vitamina (Proteína, Hierro, etc.)")
     parser.add_argument("--mts", action="store_true", help="Inyectar pack de MTs de Tienda y Casino")
     parser.add_argument("--item", nargs=2, action="append", metavar=('ID', 'CANTIDAD'), help="Añadir objeto por ID y cantidad")
+    parser.add_argument("--team-box6", action="store_true", help="Inyectar Equipo Élite de Aventura en la Caja del PC 6")
 
     args = parser.parse_args()
 
     # Si se pasan argumentos por línea de comandos
-    if any([args.dinero, args.banco, args.masterballs, args.ultraballs, args.caramelos, args.vitaminas, args.mts, args.item]):
+    if any([args.dinero, args.banco, args.masterballs, args.ultraballs, args.caramelos, args.vitaminas, args.mts, args.item, args.team_box6]):
         items_c = []
         if args.item:
             for it_id, it_cnt in args.item:
                 items_c.append((int(it_id), int(it_cnt)))
+        box_pk = [dict(p, box=6) for p in ADVENTURE_DREAM_TEAM] if args.team_box6 else None
         execute_injection(
             dinero=args.dinero,
             banco=args.banco,
@@ -919,7 +1053,8 @@ if __name__ == "__main__":
             caramelos=args.caramelos,
             vitaminas=args.vitaminas,
             items_custom=items_c,
-            mts=args.mts
+            mts=args.mts,
+            box_pokemon=box_pk
         )
     else:
         print("=== INYECTOR SEGURO Y JUSTIFICADO - POKÉMON RELOADED ===")

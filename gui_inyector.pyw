@@ -26,6 +26,8 @@ class InyectorApp:
         self.green = "#16a34a"
 
         self.catalog = inyector_reloaded.load_item_catalog() + inyector_reloaded.load_mt_catalog()
+        self.pkmn_catalog = inyector_reloaded.load_pokemon_catalog()
+        self.atk_catalog = inyector_reloaded.load_attack_catalog()
         self.bag_counts = {}
         self.queued_items = []  # [(id, name, pocket, qty)]
         self.nav_buttons = {}
@@ -101,6 +103,7 @@ class InyectorApp:
 
         nav_items = [
             ("home", "🏠  Resumen y Packs"),
+            ("pokemon", f"🐉  Pokémon ({len(self.pkmn_catalog)})"),
             ("items", f"🎒  Objetos ({items_count})"),
             ("balls", f"🔴  Poké Balls ({balls_count})"),
             ("mts", f"💿  MTs y MOs ({mts_count})"),
@@ -169,6 +172,7 @@ class InyectorApp:
 
         # Construir páginas
         self._build_home_page()
+        self._build_pokemon_page()
         self._build_pocket_page("items", "item", "🎒 Mochila de Objetos", "Busca cualquier objeto, pon la cantidad y envíalo directo a tu mochila.")
         self._build_pocket_page("balls", "ball", "🔴 Mochila de Poké Balls", "Las Master Balls se justifican automáticamente en la historia (ev_1434).")
         self._build_pocket_page("mts", "mt", "💿 Catálogo Completo de MTs y MOs", "Añade cualquier MT/MO individual o todas las MTs (MT1–MT110) con 1 clic.")
@@ -632,6 +636,127 @@ class InyectorApp:
             ">>> Sincronizando: Subiendo partida actual a la nube (GitHub)...",
             "¡Partida respaldada y subida a tu repositorio de guardados en GitHub!",
         )
+
+    def _build_pokemon_page(self):
+        page = tk.Frame(self.content_frame, bg=self.bg_main)
+        self.pages["pokemon"] = page
+
+        tk.Label(page, text="🐉 Inyector Seguro de Pokémon (Caja del PC)", font=("Segoe UI", 15, "bold"), bg=self.bg_main, fg=self.fg_text).pack(anchor="w")
+        tk.Label(page, text="Inyecta Pokémon en cualquier Caja del PC recalculando vsietecj y vsietecj2. Al sacarlos del PC el juego calcula todos sus stats y tipos.", font=("Segoe UI", 9), bg=self.bg_main, fg=self.fg_muted).pack(anchor="w", pady=(2, 10))
+
+        tk.Button(
+            page,
+            text="⭐ Inyectar Equipo Élite de Aventura en Caja PC 6 (Garchomp, Gardevoir, Greninja, Talonflame, Metagross, Sceptile — Nv.42)",
+            bg="#059669", fg="#ffffff", activebackground="#047857", activeforeground="#ffffff",
+            font=("Segoe UI", 9, "bold"), bd=0, padx=12, pady=8, cursor="hand2",
+            command=self._inject_dream_team_box6,
+        ).pack(fill=tk.X, pady=(0, 10))
+
+        # Buscador
+        search_bar = tk.Frame(page, bg=self.bg_main)
+        search_bar.pack(fill=tk.X, pady=(0, 8))
+        tk.Label(search_bar, text="🔍 Buscar Pokémon:", bg=self.bg_main, fg=self.fg_muted, font=("Segoe UI", 9)).pack(side=tk.LEFT)
+        self.var_pkmn_search = tk.StringVar()
+        self.var_pkmn_search.trace_add("write", lambda *_: self._refresh_pkmn_tree())
+        tk.Entry(
+            search_bar, textvariable=self.var_pkmn_search, bg=self.bg_input, fg=self.fg_text,
+            insertbackground="#ffffff", font=("Segoe UI", 10), bd=1, relief=tk.SOLID
+        ).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(8, 0), ipady=3)
+
+        # Tabla de Pokémon
+        tree_wrap = tk.Frame(page, bg=self.border_col, bd=1)
+        tree_wrap.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+        self.pkmn_tree = ttk.Treeview(tree_wrap, columns=("id", "name"), show="headings", style="Dark.Treeview", selectmode="browse")
+        self.pkmn_tree.heading("id", text="ID")
+        self.pkmn_tree.heading("name", text="Pokémon")
+        self.pkmn_tree.column("id", width=70, anchor="center", stretch=False)
+        self.pkmn_tree.column("name", width=400, anchor="w")
+        sb = ttk.Scrollbar(tree_wrap, orient="vertical", command=self.pkmn_tree.yview, style="Vertical.TScrollbar")
+        self.pkmn_tree.configure(yscrollcommand=sb.set)
+        self.pkmn_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        sb.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Configuración del Pokémon
+        cfg = tk.Frame(page, bg=self.bg_card, padx=12, pady=10, highlightbackground=self.border_col, highlightthickness=1)
+        cfg.pack(fill=tk.X)
+
+        row1 = tk.Frame(cfg, bg=self.bg_card)
+        row1.pack(fill=tk.X, pady=(0, 6))
+        tk.Label(row1, text="Caja PC:", bg=self.bg_card, fg=self.fg_muted, font=("Segoe UI", 9)).pack(side=tk.LEFT)
+        self.ent_pk_box = tk.Entry(row1, width=4, bg=self.bg_input, fg=self.fg_text, insertbackground="#ffffff", font=("Segoe UI", 9), bd=1)
+        self.ent_pk_box.insert(0, "6")
+        self.ent_pk_box.pack(side=tk.LEFT, padx=(4, 12))
+
+        tk.Label(row1, text="Nivel:", bg=self.bg_card, fg=self.fg_muted, font=("Segoe UI", 9)).pack(side=tk.LEFT)
+        self.ent_pk_lvl = tk.Entry(row1, width=5, bg=self.bg_input, fg=self.fg_text, insertbackground="#ffffff", font=("Segoe UI", 9), bd=1)
+        self.ent_pk_lvl.insert(0, "42")
+        self.ent_pk_lvl.pack(side=tk.LEFT, padx=(4, 12))
+
+        tk.Label(row1, text="IVs (999999=Max):", bg=self.bg_card, fg=self.fg_muted, font=("Segoe UI", 9)).pack(side=tk.LEFT)
+        self.ent_pk_iv = tk.Entry(row1, width=8, bg=self.bg_input, fg=self.fg_text, insertbackground="#ffffff", font=("Segoe UI", 9), bd=1)
+        self.ent_pk_iv.insert(0, "999999")
+        self.ent_pk_iv.pack(side=tk.LEFT, padx=(4, 12))
+
+        tk.Label(row1, text="Obj ID:", bg=self.bg_card, fg=self.fg_muted, font=("Segoe UI", 9)).pack(side=tk.LEFT)
+        self.ent_pk_obj = tk.Entry(row1, width=6, bg=self.bg_input, fg=self.fg_text, insertbackground="#ffffff", font=("Segoe UI", 9), bd=1)
+        self.ent_pk_obj.insert(0, "303")
+        self.ent_pk_obj.pack(side=tk.LEFT, padx=(4, 0))
+
+        row2 = tk.Frame(cfg, bg=self.bg_card)
+        row2.pack(fill=tk.X, pady=(0, 8))
+        atk_values = [f"{a['id']} - {a['name']}" for a in self.atk_catalog]
+        defaults = ["17 - Terremoto", "41 - Rayo", "73 - Rayo hielo", "16 - Bola sombra"]
+        self.cmb_atks = []
+        for idx in range(4):
+            cmb = ttk.Combobox(row2, values=atk_values, width=16, font=("Segoe UI", 8))
+            cmb.set(defaults[idx])
+            cmb.pack(side=tk.LEFT, padx=(0 if idx == 0 else 4, 0), fill=tk.X, expand=True)
+            self.cmb_atks.append(cmb)
+
+        tk.Button(
+            cfg, text="➕ Inyectar Pokémon Seleccionado en la Caja PC",
+            bg=self.accent, fg="#ffffff", activebackground=self.accent_hover, activeforeground="#ffffff",
+            font=("Segoe UI", 9, "bold"), bd=0, pady=7, cursor="hand2",
+            command=self._inject_selected_pokemon,
+        ).pack(fill=tk.X)
+
+        self._refresh_pkmn_tree()
+
+    def _refresh_pkmn_tree(self):
+        q = self.var_pkmn_search.get().strip().lower()
+        self.pkmn_tree.delete(*self.pkmn_tree.get_children())
+        for p in self.pkmn_catalog:
+            if not q or q in p["name"].lower() or q == str(p["id"]):
+                self.pkmn_tree.insert("", tk.END, values=(p["id"], p["name"]))
+
+    def _inject_selected_pokemon(self):
+        sel = self.pkmn_tree.selection()
+        if not sel:
+            messagebox.showwarning("Selección", "Selecciona un Pokémon de la lista.")
+            return
+        pk_id, pk_name = self.pkmn_tree.item(sel[0], "values")
+        try:
+            box = int(self.ent_pk_box.get().strip())
+            lvl = int(self.ent_pk_lvl.get().strip())
+            iv = int(self.ent_pk_iv.get().strip())
+            obj_id = int(self.ent_pk_obj.get().strip() or "0")
+            atks = []
+            for cmb in self.cmb_atks:
+                raw = cmb.get().strip()
+                atks.append(int(raw.split(" - ")[0]) if raw else 0)
+        except ValueError:
+            messagebox.showerror("Error", "Revisa que Caja, Nivel, IVs, Objeto y Ataques tengan números válidos.")
+            return
+
+        spec = {
+            "box": box, "pkmn_id": int(pk_id), "name": pk_name,
+            "level": lvl, "iv": iv, "item_id": obj_id, "attacks": atks, "sex": 1,
+        }
+        self.run_injection_wrapper(box_pokemon=[spec])
+
+    def _inject_dream_team_box6(self):
+        team = [dict(p, box=6) for p in inyector_reloaded.ADVENTURE_DREAM_TEAM]
+        self.run_injection_wrapper(box_pokemon=team)
 
     def launch_game(self):
         exe_path = r"Proyecto Reloaded The Last Beta 1.9.2.2 Full\Proyecto Reloaded The Last Beta 1.9.2.2 Full.exe"
