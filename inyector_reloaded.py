@@ -550,6 +550,32 @@ TOP_ADVENTURE_TEAMS = {
 
 ADVENTURE_DREAM_TEAM = TOP_ADVENTURE_TEAMS["equilibrado"]
 
+# 22 Pokémon Únicos / Exclusivos de Pokémon Reloaded (Región Star, Nv.42, IVs 999999, Restos)
+RELOADED_EXCLUSIVES = [
+    {"pkmn_id": 494, "name": "Terodactyl",      "level": 42, "iv": 999999, "attacks": [446, 17, 197, 40],  "item_id": 303, "sex": 1},
+    {"pkmn_id": 495, "name": "Pikablue",        "level": 42, "iv": 999999, "attacks": [41, 9, 73, 505],    "item_id": 303, "sex": 1},
+    {"pkmn_id": 496, "name": "Ghost",           "level": 42, "iv": 999999, "attacks": [16, 43, 411, 41],   "item_id": 303, "sex": 0},
+    {"pkmn_id": 497, "name": "Pryncice",        "level": 42, "iv": 999999, "attacks": [73, 43, 16, 419],   "item_id": 303, "sex": 2},
+    {"pkmn_id": 498, "name": "Onix de Cristal", "level": 42, "iv": 999999, "attacks": [17, 446, 73, 212],  "item_id": 303, "sex": 1},
+    {"pkmn_id": 499, "name": "Latly",           "level": 42, "iv": 999999, "attacks": [43, 414, 73, 41],   "item_id": 303, "sex": 2},
+    {"pkmn_id": 500, "name": "Mewthree",        "level": 42, "iv": 999999, "attacks": [43, 409, 16, 73],   "item_id": 303, "sex": 0},
+    {"pkmn_id": 503, "name": "Kytto",           "level": 42, "iv": 999999, "attacks": [16, 411, 41, 43],   "item_id": 303, "sex": 2},
+    {"pkmn_id": 504, "name": "Orphegasus",      "level": 42, "iv": 999999, "attacks": [202, 421, 2, 40],   "item_id": 303, "sex": 1},
+    {"pkmn_id": 505, "name": "Eeveon",          "level": 42, "iv": 999999, "attacks": [282, 16, 17, 377],  "item_id": 303, "sex": 1},
+    {"pkmn_id": 506, "name": "Phanteon",        "level": 42, "iv": 999999, "attacks": [16, 411, 43, 419],  "item_id": 303, "sex": 1},
+    {"pkmn_id": 507, "name": "Drakeon",         "level": 42, "iv": 999999, "attacks": [414, 197, 2, 17],   "item_id": 303, "sex": 1},
+    {"pkmn_id": 508, "name": "Rockeon",         "level": 42, "iv": 999999, "attacks": [446, 17, 159, 212], "item_id": 303, "sex": 1},
+    {"pkmn_id": 509, "name": "Rekivolt",        "level": 42, "iv": 999999, "attacks": [41, 446, 505, 17],  "item_id": 303, "sex": 1},
+    {"pkmn_id": 510, "name": "Tursoot",         "level": 42, "iv": 999999, "attacks": [2, 17, 159, 239],   "item_id": 303, "sex": 1},
+    {"pkmn_id": 511, "name": "Torkore",         "level": 42, "iv": 999999, "attacks": [2, 202, 17, 446],   "item_id": 303, "sex": 1},
+    {"pkmn_id": 512, "name": "Scyclaw",         "level": 42, "iv": 999999, "attacks": [413, 421, 312, 377],"item_id": 303, "sex": 1},
+    {"pkmn_id": 513, "name": "Betearow",        "level": 42, "iv": 999999, "attacks": [421, 199, 40, 377], "item_id": 303, "sex": 1},
+    {"pkmn_id": 514, "name": "Harfetch'd",      "level": 42, "iv": 999999, "attacks": [421, 372, 390, 377],"item_id": 303, "sex": 1},
+    {"pkmn_id": 515, "name": "Chartfortt",      "level": 42, "iv": 999999, "attacks": [199, 43, 41, 377],  "item_id": 303, "sex": 1},
+    {"pkmn_id": 516, "name": "Psicovenom",      "level": 42, "iv": 999999, "attacks": [43, 239, 16, 411],  "item_id": 303, "sex": 0},
+    {"pkmn_id": 517, "name": "Gripherial",      "level": 42, "iv": 999999, "attacks": [421, 197, 390, 40], "item_id": 303, "sex": 1},
+]
+
 def execute_injection(dinero=None, banco=None, masterballs=None, ultraballs=None, caramelos=None, vitaminas=None, items_custom=None, balls_custom=None, mts=None, box_pokemon=None):
     if not check_game_process():
         raise RuntimeError("Pokémon Reloaded está en ejecución. Ciérralo antes de inyectar.")
@@ -818,7 +844,8 @@ def execute_injection(dinero=None, banco=None, masterballs=None, ultraballs=None
         base_date = int(glb.lastDateStored) if int(glb.lastDateStored) > 0 else 121649369
         next_uid = int(glb.fy_001) if int(glb.fy_001) > 0 else 100
         for spec in box_pokemon:
-            c = int(spec.get('box', 6))
+            raw_box = spec.get('box', 3)
+            c = num_cajas if str(raw_box).lower() == 'last' else int(raw_box)
             if c < 1 or c > num_cajas:
                 raise ValueError(f"Caja {c} fuera de rango (1..{num_cajas}).")
             slot = spec.get('slot', None)

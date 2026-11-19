@@ -671,6 +671,13 @@ class InyectorApp:
             command=self._clear_box6,
         ).pack(side=tk.LEFT, padx=(4, 0))
 
+        tk.Button(
+            page, text="🌟 Inyectar los 22 Pokémon Únicos de Reloaded en la Última Caja (Mewthree, Psicovenom, Orphegasus, Eeveeluciones...)",
+            bg="#7c3aed", fg="#ffffff", activebackground="#6d28d9", activeforeground="#ffffff",
+            font=("Segoe UI", 8, "bold"), bd=0, padx=10, pady=7, cursor="hand2",
+            command=self._inject_reloaded_exclusives_last_box,
+        ).pack(fill=tk.X, pady=(0, 8))
+
         # Buscador
         search_bar = tk.Frame(page, bg=self.bg_main)
         search_bar.pack(fill=tk.X, pady=(0, 8))
@@ -780,6 +787,10 @@ class InyectorApp:
             messagebox.showerror("Error", "Ingresa un número de Caja PC válido.")
             return
         team = [dict(p, box=box) for p in inyector_reloaded.TOP_ADVENTURE_TEAMS[team_key]]
+        self.run_injection_wrapper(box_pokemon=team)
+
+    def _inject_reloaded_exclusives_last_box(self):
+        team = [dict(p, box="last", slot=idx) for idx, p in enumerate(inyector_reloaded.RELOADED_EXCLUSIVES)]
         self.run_injection_wrapper(box_pokemon=team)
 
     def _clear_box6(self):
