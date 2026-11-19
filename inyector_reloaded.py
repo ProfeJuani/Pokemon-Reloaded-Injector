@@ -576,7 +576,7 @@ RELOADED_EXCLUSIVES = [
     {"pkmn_id": 517, "name": "Gripherial",      "level": 42, "iv": 999999, "attacks": [421, 197, 390, 40], "item_id": 303, "sex": 1},
 ]
 
-def execute_injection(dinero=None, banco=None, masterballs=None, ultraballs=None, caramelos=None, vitaminas=None, items_custom=None, balls_custom=None, mts=None, box_pokemon=None):
+def execute_injection(dinero=None, banco=None, masterballs=None, ultraballs=None, caramelos=None, vitaminas=None, items_custom=None, balls_custom=None, mts=None, box_pokemon=None, max_party_stats=False):
     if not check_game_process():
         raise RuntimeError("Pokémon Reloaded está en ejecución. Ciérralo antes de inyectar.")
         
@@ -886,7 +886,7 @@ def execute_injection(dinero=None, banco=None, masterballs=None, ultraballs=None
             atks = list(spec.get('attacks', [17, 197, 41, 16])) + [0, 0, 0, 0]
             a1, a2, a3, a4 = int(atks[0]), int(atks[1]), int(atks[2]), int(atks[3])
             aux_mask = (mask1 + 7 + 5000) if (mask1 + 7 < 5000) else (mask1 + 7)
-            aux_ntv = (pk_id * 7919 + slot * 104729 + lvl * 997) % 1000000
+            aux_ntv = int(spec.get('ntv', 999999))
             selue = int(spec.get('selue', ((aux_mask - abs(pk_id)) * 1000000) + aux_ntv))
             isep = int(spec.get('isep', 50))
             nick = str(spec.get('nickname', ''))
@@ -938,6 +938,40 @@ def execute_injection(dinero=None, banco=None, masterballs=None, ultraballs=None
             obj_3.vsietecj2[c] = v7_2
             replacements[f'obj_3.vsietecj2[{c}]'] = v7_2
             print(f"    [*] Checksums Caja {c} recalculados: vsietecj={v7_1}, vsietecj2={v7_2}")
+
+    # G. Entrenamiento Extremo Total del Equipo Actual (EVs=999999 + Genética/Chapa Dorada=999999)
+    if max_party_stats:
+        party_changed = False
+        for i in range(6):
+            if int(glb.pkmn1[i]) > 0:
+                glb.IV[i] = 999999
+                replacements[f'glb.IV[{i}]'] = 999999
+                prefix = int(glb.selue_pk1[i]) // 1000000
+                new_selue = prefix * 1000000 + 999999
+                glb.selue_pk1[i] = new_selue
+                replacements[f'glb.selue_pk1[{i}]'] = new_selue
+                party_changed = True
+                print(f"[+] Equipo Slot {i + 1} (ID {int(glb.pkmn1[i])}): EVs=999999 | Entrenamiento Extremo=999999 (selue={new_selue})")
+        if party_changed:
+            calc_pk2 = (((int(obj_3.secopk2) + mask1) * 7) + ((15 + mask2) * 6))
+            for i in range(6):
+                calc_pk2 += (i*7) + (int(glb.PP_1[i])*6) + (int(glb.PS_1[i])*7) + int(glb.STD1[i]) + 361
+                calc_pk2 += (i*3) + (int(glb.IV[i])*7) + (int(glb.objpoke1[i])*6) + (int(glb.selue_pk1[i])*11) + int(glb.pkmnsex1[i]) + 361
+                calc_pk2 += (i*7) + (int(glb.PP_2[i])*6) + (int(glb.PS_2[i])*7) + int(glb.STD2[i]) + 361
+                calc_pk2 += (i*3) + (int(glb.IV2[i])*7) + (int(glb.objpoke2[i])*6) + (int(glb.selue_pk2[i])*11) + int(glb.pkmnsex2[i]) + 361
+                for j in range(1, 5):
+                    calc_pk2 += int(glb.attack1[i, j]) * 7 * j
+                    calc_pk2 += int(glb.attack2[i, j]) * 7 * j
+                v1 = round(glb.vel1[i] * 100)
+                v2 = round(glb.vel2[i] * 100)
+                calc_pk2 += (i*13) + (((int(glb.actual1)+8)*5) + (int(glb.MAX_PP_1[i])*2) + (int(glb.MAX_PS_1[i])*2) + (int(glb.XTRA_PS_1[i])*2) + (int(glb.atk1[i])*3) + (int(glb.def1[i])*3) + (v1 * 7))
+                calc_pk2 += (int(glb.atk_sp1[i])*5) + (int(glb.def_sp1[i])*3) + (int(glb.prec1[i])*4) + (int(glb.tipoA1[i])*6) + (int(glb.tipoB1[i])*5) + (int(glb.tipoC1[i])*4)
+                calc_pk2 += (i*13) + (((int(glb.actual2)+8)*5) + (int(glb.MAX_PP_2[i])*2) + (int(glb.MAX_PS_2[i])*2) + (int(glb.XTRA_PS_2[i])*2) + (int(glb.atk2[i])*3) + (int(glb.def2[i])*3) + (v2 * 9))
+                calc_pk2 += (int(glb.atk_sp2[i])*5) + (int(glb.def_sp2[i])*3) + (int(glb.prec2[i])*4) + (int(glb.tipoA2[i])*6) + (int(glb.tipoB2[i])*5) + (int(glb.tipoC2[i])*4)
+            calc_pk2 = int(calc_pk2) % 1000000
+            obj_3.vsietepk2 = calc_pk2
+            replacements['obj_3.vsietepk2'] = calc_pk2
+            print(f"    [*] Checksum de Equipo recalculado: vsietepk2={calc_pk2}")
 
     # 3. Aplicar parche binario sobre el stream completo
     pos = 0
@@ -1055,6 +1089,9 @@ def execute_injection(dinero=None, banco=None, masterballs=None, ultraballs=None
     code_patch = code_patch.replace("glb.fy_001=ex(9342)", "glb.fy_001=ex(9342, 'glb.fy_001')")
     code_patch = code_patch.replace("obj_3.vsietecj[i]=ex(9342)", "obj_3.vsietecj[i]=ex(9342, f'obj_3.vsietecj[{i}]')")
     code_patch = code_patch.replace("obj_3.vsietecj2[i]=ex(9342)", "obj_3.vsietecj2[i]=ex(9342, f'obj_3.vsietecj2[{i}]')")
+    code_patch = code_patch.replace("obj_3.vsietepk2=ex(9342)", "obj_3.vsietepk2=ex(9342, 'obj_3.vsietepk2')")
+    code_patch = code_patch.replace("glb.IV[i]=ex(9342)", "glb.IV[i]=ex(9342, f'glb.IV[{i}]')")
+    code_patch = code_patch.replace("glb.selue_pk1[i]=ex(9342)", "glb.selue_pk1[i]=ex(9342, f'glb.selue_pk1[{i}]')")
 
     for bf in ('boxpkmn', 'boxnivel', 'boxexp', 'boxIV', 'boxobjpoke', 'boxpkmnsex',
                'boxat1', 'boxat2', 'boxat3', 'boxat4', 'boxselue_pk',
@@ -1103,11 +1140,12 @@ if __name__ == "__main__":
     parser.add_argument("--mts", action="store_true", help="Inyectar pack de MTs de Tienda y Casino")
     parser.add_argument("--item", nargs=2, action="append", metavar=('ID', 'CANTIDAD'), help="Añadir objeto por ID y cantidad")
     parser.add_argument("--team-box6", action="store_true", help="Inyectar Equipo Élite de Aventura en la Caja del PC 6")
+    parser.add_argument("--max-party", action="store_true", help="Aplicar Entrenamiento Extremo (EVs=999999 + Genética/Chapa Dorada=999999) a todo tu equipo actual")
 
     args = parser.parse_args()
 
     # Si se pasan argumentos por línea de comandos
-    if any([args.dinero, args.banco, args.masterballs, args.ultraballs, args.caramelos, args.vitaminas, args.mts, args.item, args.team_box6]):
+    if any([args.dinero, args.banco, args.masterballs, args.ultraballs, args.caramelos, args.vitaminas, args.mts, args.item, args.team_box6, args.max_party]):
         items_c = []
         if args.item:
             for it_id, it_cnt in args.item:
@@ -1122,7 +1160,8 @@ if __name__ == "__main__":
             vitaminas=args.vitaminas,
             items_custom=items_c,
             mts=args.mts,
-            box_pokemon=box_pk
+            box_pokemon=box_pk,
+            max_party_stats=args.max_party
         )
     else:
         print("=== INYECTOR SEGURO Y JUSTIFICADO - POKÉMON RELOADED ===")

@@ -676,6 +676,13 @@ class InyectorApp:
             bg="#7c3aed", fg="#ffffff", activebackground="#6d28d9", activeforeground="#ffffff",
             font=("Segoe UI", 8, "bold"), bd=0, padx=10, pady=7, cursor="hand2",
             command=self._inject_reloaded_exclusives_last_box,
+        ).pack(fill=tk.X, pady=(0, 6))
+
+        tk.Button(
+            page, text="💪 Entrenamiento Extremo Total — Maxear Genética (Chapa Dorada 999999) + EVs (999999) de TODO tu Equipo Actual",
+            bg="#dc2626", fg="#ffffff", activebackground="#b91c1c", activeforeground="#ffffff",
+            font=("Segoe UI", 8, "bold"), bd=0, padx=10, pady=7, cursor="hand2",
+            command=lambda: self.run_injection_wrapper(max_party_stats=True),
         ).pack(fill=tk.X, pady=(0, 8))
 
         # Buscador
