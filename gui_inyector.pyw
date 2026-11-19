@@ -644,13 +644,32 @@ class InyectorApp:
         tk.Label(page, text="🐉 Inyector Seguro de Pokémon (Caja del PC)", font=("Segoe UI", 15, "bold"), bg=self.bg_main, fg=self.fg_text).pack(anchor="w")
         tk.Label(page, text="Inyecta Pokémon en cualquier Caja del PC recalculando vsietecj y vsietecj2. Al sacarlos del PC el juego calcula todos sus stats y tipos.", font=("Segoe UI", 9), bg=self.bg_main, fg=self.fg_muted).pack(anchor="w", pady=(2, 10))
 
+        teams_bar = tk.Frame(page, bg=self.bg_main)
+        teams_bar.pack(fill=tk.X, pady=(0, 8))
         tk.Button(
-            page,
-            text="⭐ Inyectar Equipo Élite de Aventura en Caja PC 6 (Garchomp, Gardevoir, Greninja, Talonflame, Metagross, Sceptile — Nv.42)",
+            teams_bar, text="⚡ Eq.1 Velocidad/Equilib.",
             bg="#059669", fg="#ffffff", activebackground="#047857", activeforeground="#ffffff",
-            font=("Segoe UI", 9, "bold"), bd=0, padx=12, pady=8, cursor="hand2",
-            command=self._inject_dream_team_box6,
-        ).pack(fill=tk.X, pady=(0, 10))
+            font=("Segoe UI", 8, "bold"), bd=0, padx=8, pady=7, cursor="hand2",
+            command=lambda: self._inject_top_team("equilibrado"),
+        ).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 4))
+        tk.Button(
+            teams_bar, text="🔥 Eq.2 Ofensiva/Megas",
+            bg="#d97706", fg="#ffffff", activebackground="#b45309", activeforeground="#ffffff",
+            font=("Segoe UI", 8, "bold"), bd=0, padx=8, pady=7, cursor="hand2",
+            command=lambda: self._inject_top_team("ofensivo"),
+        ).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=4)
+        tk.Button(
+            teams_bar, text="🛡️ Eq.3 Tanques/Élite",
+            bg="#0284c7", fg="#ffffff", activebackground="#0369a1", activeforeground="#ffffff",
+            font=("Segoe UI", 8, "bold"), bd=0, padx=8, pady=7, cursor="hand2",
+            command=lambda: self._inject_top_team("tanques"),
+        ).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=4)
+        tk.Button(
+            teams_bar, text="🧹 Limpiar Caja 6",
+            bg="#52525b", fg="#ffffff", activebackground="#3f3f46", activeforeground="#ffffff",
+            font=("Segoe UI", 8), bd=0, padx=8, pady=7, cursor="hand2",
+            command=self._clear_box6,
+        ).pack(side=tk.LEFT, padx=(4, 0))
 
         # Buscador
         search_bar = tk.Frame(page, bg=self.bg_main)
@@ -684,7 +703,7 @@ class InyectorApp:
         row1.pack(fill=tk.X, pady=(0, 6))
         tk.Label(row1, text="Caja PC:", bg=self.bg_card, fg=self.fg_muted, font=("Segoe UI", 9)).pack(side=tk.LEFT)
         self.ent_pk_box = tk.Entry(row1, width=4, bg=self.bg_input, fg=self.fg_text, insertbackground="#ffffff", font=("Segoe UI", 9), bd=1)
-        self.ent_pk_box.insert(0, "6")
+        self.ent_pk_box.insert(0, "3")
         self.ent_pk_box.pack(side=tk.LEFT, padx=(4, 12))
 
         tk.Label(row1, text="Nivel:", bg=self.bg_card, fg=self.fg_muted, font=("Segoe UI", 9)).pack(side=tk.LEFT)
@@ -754,9 +773,20 @@ class InyectorApp:
         }
         self.run_injection_wrapper(box_pokemon=[spec])
 
-    def _inject_dream_team_box6(self):
-        team = [dict(p, box=6, slot=idx) for idx, p in enumerate(inyector_reloaded.ADVENTURE_DREAM_TEAM)]
+    def _inject_top_team(self, team_key):
+        try:
+            box = int(self.ent_pk_box.get().strip() or "3")
+        except ValueError:
+            messagebox.showerror("Error", "Ingresa un número de Caja PC válido.")
+            return
+        team = [dict(p, box=box) for p in inyector_reloaded.TOP_ADVENTURE_TEAMS[team_key]]
         self.run_injection_wrapper(box_pokemon=team)
+
+    def _clear_box6(self):
+        if not messagebox.askyesno("Limpiar Caja 6", "¿Vaciar los primeros 6 slots de la Caja PC 6?"):
+            return
+        clears = [{"box": 6, "slot": j, "pkmn_id": 0} for j in range(6)]
+        self.run_injection_wrapper(box_pokemon=clears)
 
     def launch_game(self):
         exe_path = r"Proyecto Reloaded The Last Beta 1.9.2.2 Full\Proyecto Reloaded The Last Beta 1.9.2.2 Full.exe"

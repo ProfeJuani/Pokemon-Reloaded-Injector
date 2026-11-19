@@ -520,15 +520,35 @@ def load_attack_catalog():
                 res.append({"id": idx, "name": name})
     return res
 
-# Equipo Élite de Aventura para Pokémon Reloaded (Núcleo FWG + Dragón/Hada/Acero)
-ADVENTURE_DREAM_TEAM = [
-    {"pkmn_id": 445, "name": "Garchomp",   "level": 42, "iv": 999999, "attacks": [17, 197, 446, 212], "item_id": 303, "sex": 1},
-    {"pkmn_id": 282, "name": "Gardevoir",  "level": 42, "iv": 999999, "attacks": [43, 566, 41, 16],   "item_id": 303, "sex": 2},
-    {"pkmn_id": 753, "name": "Greninja",   "level": 42, "iv": 999999, "attacks": [9, 73, 411, 578],   "item_id": 303, "sex": 1},
-    {"pkmn_id": 758, "name": "Talonflame", "level": 42, "iv": 999999, "attacks": [202, 421, 2, 377],  "item_id": 303, "sex": 1},
-    {"pkmn_id": 376, "name": "Metagross",  "level": 42, "iv": 999999, "attacks": [338, 432, 30, 17],  "item_id": 303, "sex": 0},
-    {"pkmn_id": 254, "name": "Sceptile",   "level": 42, "iv": 999999, "attacks": [372, 252, 414, 419],"item_id": 303, "sex": 1},
-]
+# 3 Equipos TOP de Aventura para Pokémon Reloaded (todos Nv.42, IVs 999999, Restos)
+TOP_ADVENTURE_TEAMS = {
+    "equilibrado": [
+        {"pkmn_id": 445, "name": "Garchomp",   "level": 42, "iv": 999999, "attacks": [17, 197, 446, 212], "item_id": 303, "sex": 1},
+        {"pkmn_id": 282, "name": "Gardevoir",  "level": 42, "iv": 999999, "attacks": [43, 566, 41, 16],   "item_id": 303, "sex": 2},
+        {"pkmn_id": 753, "name": "Greninja",   "level": 42, "iv": 999999, "attacks": [9, 73, 411, 578],   "item_id": 303, "sex": 1},
+        {"pkmn_id": 758, "name": "Talonflame", "level": 42, "iv": 999999, "attacks": [202, 421, 2, 377],  "item_id": 303, "sex": 1},
+        {"pkmn_id": 376, "name": "Metagross",  "level": 42, "iv": 999999, "attacks": [338, 432, 30, 17],  "item_id": 303, "sex": 0},
+        {"pkmn_id": 254, "name": "Sceptile",   "level": 42, "iv": 999999, "attacks": [372, 252, 414, 419],"item_id": 303, "sex": 1},
+    ],
+    "ofensivo": [
+        {"pkmn_id": 6,   "name": "Charizard",  "level": 42, "iv": 999999, "attacks": [2, 199, 414, 40],   "item_id": 303, "sex": 1},
+        {"pkmn_id": 448, "name": "Lucario",    "level": 42, "iv": 999999, "attacks": [409, 338, 282, 17], "item_id": 303, "sex": 1},
+        {"pkmn_id": 94,  "name": "Gengar",     "level": 42, "iv": 999999, "attacks": [16, 239, 41, 419],  "item_id": 303, "sex": 1},
+        {"pkmn_id": 149, "name": "Dragonite",  "level": 42, "iv": 999999, "attacks": [197, 282, 29, 17],  "item_id": 303, "sex": 1},
+        {"pkmn_id": 260, "name": "Swampert",   "level": 42, "iv": 999999, "attacks": [129, 17, 30, 159],  "item_id": 303, "sex": 1},
+        {"pkmn_id": 135, "name": "Jolteon",    "level": 42, "iv": 999999, "attacks": [41, 16, 505, 94],   "item_id": 303, "sex": 1},
+    ],
+    "tanques": [
+        {"pkmn_id": 248, "name": "Tyranitar",  "level": 42, "iv": 999999, "attacks": [446, 212, 17, 30],  "item_id": 303, "sex": 1},
+        {"pkmn_id": 257, "name": "Blaziken",   "level": 42, "iv": 999999, "attacks": [330, 390, 159, 421],"item_id": 303, "sex": 1},
+        {"pkmn_id": 130, "name": "Gyarados",   "level": 42, "iv": 999999, "attacks": [129, 373, 17, 212], "item_id": 303, "sex": 1},
+        {"pkmn_id": 3,   "name": "Venusaur",   "level": 42, "iv": 999999, "attacks": [252, 239, 91, 87],  "item_id": 303, "sex": 1},
+        {"pkmn_id": 65,  "name": "Alakazam",   "level": 42, "iv": 999999, "attacks": [43, 16, 419, 568],  "item_id": 303, "sex": 1},
+        {"pkmn_id": 212, "name": "Scizor",     "level": 42, "iv": 999999, "attacks": [426, 413, 312, 377],"item_id": 303, "sex": 1},
+    ],
+}
+
+ADVENTURE_DREAM_TEAM = TOP_ADVENTURE_TEAMS["equilibrado"]
 
 def execute_injection(dinero=None, banco=None, masterballs=None, ultraballs=None, caramelos=None, vitaminas=None, items_custom=None, balls_custom=None, mts=None, box_pokemon=None):
     if not check_game_process():
@@ -812,6 +832,25 @@ def execute_injection(dinero=None, banco=None, masterballs=None, ultraballs=None
             slot = int(slot)
 
             pk_id = int(spec['pkmn_id'])
+            if pk_id == 0:
+                field_vals = {
+                    'boxpkmn': 0, 'boxnivel': 0, 'boxexp': 0, 'boxIV': 0,
+                    'boxobjpoke': 0, 'boxpkmnsex': 0,
+                    'boxat1': 0, 'boxat2': 0, 'boxat3': 0, 'boxat4': 0,
+                    'boxselue_pk': -1,
+                    'boxinfo0': 0, 'boxinfo1': 0, 'boxinfo2': 0, 'boxinfo3': 0,
+                    'boxinfo4': '', 'boxinfo5': '',
+                    'boxinfo6': 0, 'boxinfo7': 0, 'boxinfo8': 0,
+                    'boxinfo9': 0, 'boxinfo10': 0, 'boxinfo11': 0, 'boxinfo12': 0,
+                    'boxinfo13': 0, 'boxinfo14': 0, 'boxinfo15': 0,
+                }
+                for fname, fval in field_vals.items():
+                    getattr(glb, fname)[c, slot] = fval
+                    replacements[f'glb.{fname}[{c},{slot}]'] = fval
+                modified_boxes.add(c)
+                print(f"[-] Caja {c} Slot {slot + 1}: limpiado.")
+                continue
+
             lvl = max(1, min(100, int(spec.get('level', 42))))
             exp = int(spec.get('exp', lvl ** 3))
             iv = max(0, min(999999, int(spec.get('iv', 999999))))
