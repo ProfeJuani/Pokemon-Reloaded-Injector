@@ -12,7 +12,7 @@ Diseñado para modificar legalmente y con 100% de integridad:
   * 100% autonomo y portable (sin dependencias externas de descompilacion).
 """
 
-import os, sys, re, shutil, time, subprocess, argparse
+import os, sys, re, shutil, time, subprocess, argparse, json
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 GAME_DIR = os.path.join(BASE_DIR, "Proyecto Reloaded The Last Beta 1.9.2.2 Full")
@@ -36,6 +36,53 @@ m_10010 = {i: M_10010[i] for i in range(256)}
 m_10009 = {i: M_10009[i] for i in range(256)}
 m_10008 = {i: M_10008[i] for i in range(256)}
 m_10007 = {i: M_10007[i] for i in range(256)}
+
+EXP_TABLE_PATH = os.path.join(BASE_DIR, "exp_table.json")
+_EXP_TABLE_CACHE = None
+
+def _get_exp_table():
+    global _EXP_TABLE_CACHE
+    if _EXP_TABLE_CACHE is None:
+        if os.path.exists(EXP_TABLE_PATH):
+            raw = json.load(open(EXP_TABLE_PATH, "r", encoding="utf-8"))
+            _EXP_TABLE_CACHE = (
+                {int(k): int(v) for k, v in raw.get("pk_to_dex", {}).items()},
+                {int(k): int(v) for k, v in raw.get("dex_to_group", {}).items()},
+            )
+        else:
+            _EXP_TABLE_CACHE = ({}, {})
+    return _EXP_TABLE_CACHE
+
+def calc_exact_exp(pk_id, level):
+    """Calcula la EXP exacta del motor (Scripts 3660 + 3695 + 2881) para evitar Anomalía 6601..6606."""
+    lv = int(level)
+    if lv <= 1:
+        return 1
+    pk = int(pk_id)
+    if pk > 200000: pk -= 200000
+    if pk > 150000: pk -= 150000
+    if pk > 100000: pk -= 100000
+    pk_to_dex, dex_to_group = _get_exp_table()
+    dex = pk if (1 <= pk <= 493) else pk_to_dex.get(pk, pk)
+    mode = dex_to_group.get(dex, 0)
+    n3 = lv ** 3
+    if mode == 0: val = n3
+    elif mode == 1: val = 0.8 * n3
+    elif mode == 2: val = 1.25 * n3
+    elif mode == 3: val = (1.2 * n3) - (15 * lv * lv) + (100 * lv) - 140
+    elif mode == 4:
+        va = lv % 3
+        va = 0.008 if va == 1 else (0.014 if va == 2 else 0)
+        if lv <= 50: val = n3 * (100 - lv) / 50
+        elif lv <= 68: val = n3 * (150 - lv) / 100
+        elif lv <= 98: val = n3 * (1.274 - lv / 150 - va)
+        else: val = n3 * (160 - lv) / 100
+    elif mode == 5:
+        if lv <= 15: val = n3 * (24 + (lv + 1) / 3) / 50
+        elif lv <= 35: val = n3 * (14 + lv) / 50
+        else: val = n3 * (32 + (lv / 2)) / 50
+    else: val = n3
+    return int(round(val))
 
 def verify_save(savc_path):
     if not os.path.exists(savc_path):
@@ -228,6 +275,15 @@ def verify_save(savc_path):
     calc_pk2 = int(calc_pk2) % 1000000
     if calc_pk2 != int(obj_3.vsietepk2):
         return False, f"Party pkmn battle checksum mismatch (vsietepk2 / Anomaly 8315692): calc={calc_pk2}, stored={obj_3.vsietepk2}"
+
+    # Party EXP growth-curve check (Script 3104 / Anomaly 6601..6606)
+    if os.path.exists(EXP_TABLE_PATH):
+        for i in range(6):
+            pk = int(glb.pkmn1[i]); lv = int(glb.nivel1[i]); exp = int(glb.exp1[i])
+            if pk > 0 and lv > 0:
+                lo, hi = calc_exact_exp(pk, lv), calc_exact_exp(pk, lv + 1)
+                if exp < lo or exp >= hi:
+                    return False, f"Party Slot {i} EXP out of range (Anomaly {6601+i}): pk={pk}, lv={lv}, exp={exp} not in [{lo}, {hi})"
 
     return True, f"Todos los {checkpoints_verified} checkpoints criptograficos y checksums verificados al 100%"
 
@@ -573,7 +629,7 @@ RELOADED_EXCLUSIVES = [
     {"pkmn_id": 510, "name": "Tursoot",         "level": 42, "iv": 999999, "attacks": [2, 17, 159, 239],   "item_id": 303, "sex": 1},
 ]
 
-def execute_injection(dinero=None, banco=None, masterballs=None, ultraballs=None, caramelos=None, vitaminas=None, items_custom=None, balls_custom=None, mts=None, box_pokemon=None, max_party_stats=False):
+def execute_injection(dinero=None, banco=None, masterballs=None, ultraballs=None, caramelos=None, vitaminas=None, items_custom=None, balls_custom=None, mts=None, box_pokemon=None, max_party_stats=False, fix_all_exp=False):
     if not check_game_process():
         raise RuntimeError("Pokémon Reloaded está en ejecución. Ciérralo antes de inyectar.")
         
@@ -876,7 +932,7 @@ def execute_injection(dinero=None, banco=None, masterballs=None, ultraballs=None
                 continue
 
             lvl = max(1, min(100, int(spec.get('level', 42))))
-            exp = int(spec.get('exp', lvl ** 3))
+            exp = int(spec.get('exp', calc_exact_exp(pk_id, lvl)))
             iv = max(0, min(999999, int(spec.get('iv', 999999))))
             item_id = int(spec.get('item_id', 0))
             sex = int(spec.get('sex', 1))
@@ -969,6 +1025,47 @@ def execute_injection(dinero=None, banco=None, masterballs=None, ultraballs=None
             obj_3.vsietepk2 = calc_pk2
             replacements['obj_3.vsietepk2'] = calc_pk2
             print(f"    [*] Checksum de Equipo recalculado: vsietepk2={calc_pk2}")
+
+    # H. Reparar EXP fuera de curva (Anomalía 6601..6606) en Equipo y TODAS las Cajas PC
+    if fix_all_exp:
+        exp_party_fixed = False
+        for i in range(6):
+            pk = int(glb.pkmn1[i]); lv = int(glb.nivel1[i]); cur_e = int(glb.exp1[i])
+            if pk > 0 and lv > 0:
+                lo, hi = calc_exact_exp(pk, lv), calc_exact_exp(pk, lv + 1)
+                if cur_e < lo or cur_e >= hi:
+                    glb.exp1[i] = lo
+                    replacements[f'glb.exp1[{i}]'] = lo
+                    exp_party_fixed = True
+                    print(f"[+] Equipo Slot {i + 1} (ID {pk}, Nv.{lv}): EXP corregida {cur_e} -> {lo}")
+        if exp_party_fixed:
+            calc_pk = (((int(obj_3.secopk) + mask1) * 7) + ((15 + mask2) * 6))
+            for i in range(6):
+                calc_pk += (i*7) + (int(glb.pkmn1[i])*14) + (int(glb.nivel1[i])*11) + int(glb.exp1[i]) + 361
+                calc_pk += (i*3) + (int(glb.pkmn2[i])*11) + (int(glb.nivel2[i])*14) + int(glb.exp2[i]) + 135
+            obj_3.vsietepk = calc_pk
+            replacements['obj_3.vsietepk'] = calc_pk
+            print(f"    [*] Checksum de Equipo recalculado: vsietepk={calc_pk}")
+
+        fixed_boxes = set()
+        for c in range(1, int(glb.NumCajas) + 1):
+            for j in range(30):
+                pk = int(glb.boxpkmn[c, j]); lv = int(glb.boxnivel[c, j]); cur_e = int(glb.boxexp[c, j])
+                if pk > 0 and lv > 0:
+                    lo, hi = calc_exact_exp(pk, lv), calc_exact_exp(pk, lv + 1)
+                    if cur_e < lo or cur_e >= hi:
+                        glb.boxexp[c, j] = lo
+                        replacements[f'glb.boxexp[{c},{j}]'] = lo
+                        fixed_boxes.add(c)
+                        print(f"[+] Caja {c} Slot {j + 1} (ID {pk}, Nv.{lv}): EXP corregida {cur_e} -> {lo}")
+        for c in sorted(fixed_boxes):
+            v7_1 = 0
+            for j in range(30):
+                v7_1 += (j * 2) + (int(glb.boxpkmn[c, j]) * 11) + (int(glb.boxnivel[c, j]) * 7) + int(glb.boxexp[c, j]) + 131
+            v7_1 += (((int(obj_3.secocj[c]) + mask3) * 43) + ((29 + mask2) * 3 * c))
+            obj_3.vsietecj[c] = v7_1
+            replacements[f'obj_3.vsietecj[{c}]'] = v7_1
+            print(f"    [*] Checksum Caja {c} recalculado: vsietecj={v7_1}")
 
     # 3. Aplicar parche binario sobre el stream completo
     pos = 0
@@ -1086,7 +1183,9 @@ def execute_injection(dinero=None, banco=None, masterballs=None, ultraballs=None
     code_patch = code_patch.replace("glb.fy_001=ex(9342)", "glb.fy_001=ex(9342, 'glb.fy_001')")
     code_patch = code_patch.replace("obj_3.vsietecj[i]=ex(9342)", "obj_3.vsietecj[i]=ex(9342, f'obj_3.vsietecj[{i}]')")
     code_patch = code_patch.replace("obj_3.vsietecj2[i]=ex(9342)", "obj_3.vsietecj2[i]=ex(9342, f'obj_3.vsietecj2[{i}]')")
+    code_patch = code_patch.replace("obj_3.vsietepk=ex(9342)", "obj_3.vsietepk=ex(9342, 'obj_3.vsietepk')")
     code_patch = code_patch.replace("obj_3.vsietepk2=ex(9342)", "obj_3.vsietepk2=ex(9342, 'obj_3.vsietepk2')")
+    code_patch = code_patch.replace("glb.exp1[i]=ex(9342)", "glb.exp1[i]=ex(9342, f'glb.exp1[{i}]')")
     code_patch = code_patch.replace("glb.IV[i]=ex(9342)", "glb.IV[i]=ex(9342, f'glb.IV[{i}]')")
     code_patch = code_patch.replace("glb.selue_pk1[i]=ex(9342)", "glb.selue_pk1[i]=ex(9342, f'glb.selue_pk1[{i}]')")
 
@@ -1138,11 +1237,12 @@ if __name__ == "__main__":
     parser.add_argument("--item", nargs=2, action="append", metavar=('ID', 'CANTIDAD'), help="Añadir objeto por ID y cantidad")
     parser.add_argument("--team-box6", action="store_true", help="Inyectar Equipo Élite de Aventura en la Caja del PC 6")
     parser.add_argument("--max-party", action="store_true", help="Aplicar Entrenamiento Extremo (EVs=999999 + Genética/Chapa Dorada=999999) a todo tu equipo actual")
+    parser.add_argument("--fix-exp", action="store_true", help="Corregir EXP fuera de curva (Anomalía 6601..6606) en Equipo y Cajas PC")
 
     args = parser.parse_args()
 
     # Si se pasan argumentos por línea de comandos
-    if any([args.dinero, args.banco, args.masterballs, args.ultraballs, args.caramelos, args.vitaminas, args.mts, args.item, args.team_box6, args.max_party]):
+    if any([args.dinero, args.banco, args.masterballs, args.ultraballs, args.caramelos, args.vitaminas, args.mts, args.item, args.team_box6, args.max_party, args.fix_exp]):
         items_c = []
         if args.item:
             for it_id, it_cnt in args.item:
@@ -1158,7 +1258,8 @@ if __name__ == "__main__":
             items_custom=items_c,
             mts=args.mts,
             box_pokemon=box_pk,
-            max_party_stats=args.max_party
+            max_party_stats=args.max_party,
+            fix_all_exp=args.fix_exp
         )
     else:
         print("=== INYECTOR SEGURO Y JUSTIFICADO - POKÉMON RELOADED ===")
