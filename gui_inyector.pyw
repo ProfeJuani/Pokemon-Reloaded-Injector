@@ -1,9 +1,11 @@
 import os
 import subprocess
+import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
 
 import inyector_reloaded
+import sync_nube
 
 
 class InyectorApp:
@@ -40,6 +42,7 @@ class InyectorApp:
         self._build_layout()
         self.refresh_live_status()
         self.show_page("home")
+        self._startup_cloud_sync()
 
     def _setup_styles(self):
         style = ttk.Style()
@@ -593,6 +596,25 @@ class InyectorApp:
         except Exception as e:
             self.log(f"[Error] No se pudo leer la partida: {e}")
 
+    def _startup_cloud_sync(self):
+        def _worker():
+            ok_i, msg_i = sync_nube.pull_injector()
+            ok_s, msg_s = sync_nube.pull_saves(force=False)
+            self.root.after(0, lambda: self._on_startup_sync_done(ok_i, msg_i, ok_s, msg_s))
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _on_startup_sync_done(self, ok_i, msg_i, ok_s, msg_s):
+        self.log(f"[Auto-Sync Inicio] Inyector: {msg_i} | Partida: {msg_s}")
+        if ok_s and "descargada" in msg_s.lower():
+            self.refresh_live_status()
+
+    def _auto_push_saves_async(self, reason):
+        def _worker():
+            ok, msg = sync_nube.push_saves(reason)
+            tag = "[Auto-Sync Nube OK]" if ok else "[Auto-Sync Nube Error]"
+            self.root.after(0, lambda: self.log(f"{tag} {msg}"))
+        threading.Thread(target=_worker, daemon=True).start()
+
     def run_injection_wrapper(self, **kwargs):
         self.log(">>> Iniciando inyección segura y justificada...")
         try:
@@ -600,42 +622,35 @@ class InyectorApp:
             if not ok:
                 raise RuntimeError("Falló la verificación de seguridad. Se restauró el respaldo original.")
             self.log("[Éxito] Inyección completada y verificada al 100% sin anomalías.")
-            messagebox.showinfo("Inyección Completada", "¡Cambios aplicados en tu mochila y verificados al 100%!\nPuedes abrir el juego sin riesgo.")
             self.refresh_live_status()
+            self._auto_push_saves_async("Auto-sync tras inyección")
+            messagebox.showinfo("Inyección Completada", "¡Cambios aplicados, verificados al 100% y subiendo automáticamente a GitHub!\nPuedes abrir el juego sin riesgo.")
             return True
         except Exception as e:
             self.log(f"[Error] Falló la inyección: {e}")
             messagebox.showerror("Error", f"Ocurrió un problema:\n{e}")
             return False
 
-    def _run_cloud_bat(self, bat_name, start_msg, ok_msg):
-        self.log(start_msg)
-        bat_path = os.path.abspath(bat_name)
-        if not os.path.exists(bat_path):
-            messagebox.showerror("Error", f"No se encontró {bat_name}")
-            return
-        res = subprocess.run(["cmd", "/c", bat_path], capture_output=True, text=True)
-        if res.returncode == 0:
-            self.log(f"[Éxito] {ok_msg}")
-            messagebox.showinfo("Nube", ok_msg)
-            self.refresh_live_status()
-        else:
-            self.log(f"[Error Nube] {res.stderr or res.stdout}")
-            messagebox.showerror("Error Nube", f"No se pudo completar {bat_name}.")
-
     def sync_pull_cloud(self):
-        self._run_cloud_bat(
-            "Descargar_Partida_Nube.bat",
-            ">>> Sincronizando: Descargando partida desde la nube (GitHub)...",
-            "¡Partida descargada y sincronizada desde la nube con éxito!",
-        )
+        self.log(">>> Descargando inyector y partida desde GitHub...")
+        ok_i, msg_i = sync_nube.pull_injector()
+        ok_s, msg_s = sync_nube.pull_saves(force=True)
+        self.log(f"[Nube Pull] Inyector: {msg_i} | Partida: {msg_s}")
+        if ok_s:
+            self.refresh_live_status()
+            messagebox.showinfo("Nube", f"¡Sincronización completada!\n\nInyector: {msg_i}\nPartida: {msg_s}")
+        else:
+            messagebox.showerror("Error Nube", msg_s)
 
     def sync_push_cloud(self):
-        self._run_cloud_bat(
-            "Subir_Partida_Nube.bat",
-            ">>> Sincronizando: Subiendo partida actual a la nube (GitHub)...",
-            "¡Partida respaldada y subida a tu repositorio de guardados en GitHub!",
-        )
+        self.log(">>> Subiendo cambios y partida actual a GitHub...")
+        ok_i, msg_i = sync_nube.push_injector("Sync manual inyector")
+        ok_s, msg_s = sync_nube.push_saves("Sync manual partida")
+        self.log(f"[Nube Push] Inyector: {msg_i} | Partida: {msg_s}")
+        if ok_s:
+            messagebox.showinfo("Nube", f"¡Subido a GitHub!\n\nInyector: {msg_i}\nPartida: {msg_s}")
+        else:
+            messagebox.showerror("Error Nube", msg_s)
 
     def _build_pokemon_page(self):
         page = tk.Frame(self.content_frame, bg=self.bg_main)
@@ -810,8 +825,14 @@ class InyectorApp:
         exe_path = r"Proyecto Reloaded The Last Beta 1.9.2.2 Full\Proyecto Reloaded The Last Beta 1.9.2.2 Full.exe"
         if os.path.exists(exe_path):
             cwd = os.path.dirname(os.path.abspath(exe_path))
-            subprocess.Popen([os.path.abspath(exe_path)], cwd=cwd)
-            self.log("[Juego] Lanzando Pokémon Reloaded...")
+            proc = subprocess.Popen([os.path.abspath(exe_path)], cwd=cwd)
+            self.log("[Juego] Lanzando Pokémon Reloaded (auto-subirá tu partida a GitHub al cerrar)...")
+            def _watch():
+                proc.wait()
+                ok, msg = sync_nube.push_saves("Auto-sync tras jugar")
+                tag = "[Auto-Sync Post-Juego OK]" if ok else "[Auto-Sync Post-Juego Error]"
+                self.root.after(0, lambda: (self.log(f"{tag} {msg}"), self.refresh_live_status()))
+            threading.Thread(target=_watch, daemon=True).start()
         else:
             messagebox.showerror("No encontrado", f"No se encontró el ejecutable en:\n{exe_path}")
 

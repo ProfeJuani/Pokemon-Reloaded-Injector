@@ -9,6 +9,8 @@ Proyecto Reloaded*/
 data/
 partidas/
 backups/
+backups_inyector/
+.cloud_saves_cache/
 *.savc
 *.savb
 *.data
