@@ -687,7 +687,7 @@ class InyectorApp:
         ).pack(side=tk.LEFT, padx=(4, 0))
 
         tk.Button(
-            page, text="🌟 Inyectar los 22 Pokémon Únicos de Reloaded en la Última Caja (Mewthree, Psicovenom, Orphegasus, Eeveeluciones...)",
+            page, text="🌟 Inyectar los 18 Pokémon Únicos Seguros de Reloaded en Última Caja (Orphegasus, Rekivolt, Eeveeluciones...)",
             bg="#7c3aed", fg="#ffffff", activebackground="#6d28d9", activeforeground="#ffffff",
             font=("Segoe UI", 8, "bold"), bd=0, padx=10, pady=7, cursor="hand2",
             command=self._inject_reloaded_exclusives_last_box,
@@ -813,6 +813,8 @@ class InyectorApp:
 
     def _inject_reloaded_exclusives_last_box(self):
         team = [dict(p, box="last", slot=idx) for idx, p in enumerate(inyector_reloaded.RELOADED_EXCLUSIVES)]
+        # Limpiar slots 18..21 por si quedaron los 4 legendarios bloqueados de una versión anterior
+        team.extend({"box": "last", "slot": j, "pkmn_id": 0} for j in range(len(inyector_reloaded.RELOADED_EXCLUSIVES), 22))
         self.run_injection_wrapper(box_pokemon=team)
 
     def _clear_box6(self):
